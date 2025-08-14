@@ -3,13 +3,13 @@ import setup from '../database';
 const pool = setup();
 
 // --- INTERFACES (puedes moverlas a un archivo de tipos dedicado) ---
-interface CalendarEvent {
+export interface CalendarEvent {
   title: string;
   start: string;
   allDay: boolean;
 }
 
-interface BarberStat {
+export interface BarberStat {
   barber_id: number;
   barber_name: string;
   base_salary: number;
@@ -17,7 +17,7 @@ interface BarberStat {
   payment: number;
 }
 
-interface ReportData {
+export interface ReportData {
   events: CalendarEvent[];
   stats: BarberStat[];
 }
@@ -211,4 +211,106 @@ export const getPeakHours = async (startDate: string, endDate: string): Promise<
     [startDate, endDate],
   );
   return rows.map(r => ({...r, hour: Number(r.hour), reservation_count: Number(r.reservation_count)}));
+};
+
+export const generateReport = async (
+  year: number,
+  month: number,
+): Promise<ReportData> => {
+  // Obtener el primer y último día del mes
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = new Date(year, month, 0);
+
+  // Formatear fechas para la consulta SQL
+  const startDateStr = startDate.toISOString().split('T')[0];
+  const endDateStr = endDate.toISOString().split('T')[0];
+
+  // 1. Obtener eventos (ventas y reservas) para el calendario
+  const salesEventsResult = await pool.query(
+    `
+    SELECT
+      'Venta: ' || COALESCE(s.customer_name, 'Cliente Desconocido') || ' - ' || s.total_amount || '€' AS title,
+      s.sale_date AS start,
+      TRUE AS allDay
+    FROM sales s
+    WHERE s.sale_date::date BETWEEN $1 AND $2
+    ORDER BY s.sale_date;
+  `,
+    [startDateStr, endDateStr],
+  );
+
+  const reservationEventsResult = await pool.query(
+    `
+    SELECT
+      'Reserva: ' || r.client_name || ' (' || b.name || ')' AS title,
+      r.start_time AS start,
+      FALSE AS allDay
+    FROM reservations r
+    JOIN barbers b ON r.barber_id = b.id
+    WHERE r.start_time::date BETWEEN $1 AND $2
+    ORDER BY r.start_time;
+  `,
+    [startDateStr, endDateStr],
+  );
+
+  const events: CalendarEvent[] = [
+    ...salesEventsResult.rows.map((row: any) => ({
+      title: row.title,
+      start: row.start.toISOString(),
+      allDay: row.allDay,
+    })),
+    ...reservationEventsResult.rows.map((row: any) => ({
+      title: row.title,
+      start: row.start.toISOString(),
+      allDay: row.allDay,
+    })),
+  ];
+
+  // 2. Obtener estadísticas de barberos
+  const barberStatsResult = await pool.query(
+    `
+    SELECT
+      b.id AS barber_id,
+      b.name AS barber_name,
+      b.base_salary,
+      COALESCE(SUM(si.price_at_sale * si.quantity), 0) AS total_generated
+    FROM barbers b
+    LEFT JOIN reservations r ON b.id = r.barber_id
+    LEFT JOIN sales s ON r.id = s.reservation_id AND s.sale_date::date BETWEEN $1 AND $2
+    LEFT JOIN sale_items si ON s.id = si.sale_id AND si.item_type = 'service'
+    GROUP BY
+      b.id, b.name, b.base_salary
+    ORDER BY
+      total_generated DESC;
+  `,
+    [startDateStr, endDateStr],
+  );
+
+  const stats: BarberStat[] = barberStatsResult.rows.map((row: any) => {
+    const total_generated = Number(row.total_generated);
+    const base_salary = Number(row.base_salary);
+
+    // Lógica de pago (ejemplo, esto podría ser más complejo o configurable)
+    const commission_percentage = 0.5; // 50% de comisión si supera el umbral
+    const base_salary_threshold = 2500; // Umbral para aplicar comisión
+    const default_base_salary = 1250; // Salario base si no se alcanza el umbral
+
+    let payment = default_base_salary; // Salario base por defecto
+
+    if (total_generated > base_salary_threshold) {
+      payment = total_generated * commission_percentage;
+    } else {
+      payment = base_salary; // Si no supera el umbral, se paga el salario base del barbero
+    }
+
+    return {
+      barber_id: row.barber_id,
+      barber_name: row.barber_name,
+      base_salary: base_salary,
+      total_generated: total_generated,
+      payment: payment,
+    };
+  });
+
+  return { events, stats };
 };

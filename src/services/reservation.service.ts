@@ -5,7 +5,7 @@ import { PoolClient } from 'pg';
 const pool = setup();
 
 // Keep interfaces for type safety
-interface SaleItem {
+export interface SaleItem {
   id?: number;
   sale_id?: number;
   item_id: number;
@@ -16,14 +16,14 @@ interface SaleItem {
   quantity: number;
 }
 
-interface Sale {
+export interface Sale {
   id: number;
   total_amount: number;
   payment_method: string;
   sale_items: SaleItem[];
 }
 
-interface Reservation {
+export interface Reservation {
   id?: number;
   barber_id: number;
   station_id: number;

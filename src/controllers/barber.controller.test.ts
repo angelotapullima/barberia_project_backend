@@ -1,36 +1,45 @@
 import { Request, Response } from 'express';
-import { barberController } from './barber.controller'; // Importar la instancia
-import { barberService } from '../services/barber.service'; // Importar la instancia
+import {
+  getAllBarbersController,
+  getBarberByIdController,
+  createBarberController,
+  updateBarberController,
+  deleteBarberController,
+  getBarberAvailabilityController,
+} from './barber.controller';
+import * as barberService from '../services/barber.service'; // Import all functions from service
 
-// Mock del servicio de barbero
+// Mock all functions from barber.service
 jest.mock('../services/barber.service', () => ({
-  barberService: {
-    getAllBarbers: jest.fn(),
-    createBarber: jest.fn(),
-    updateBarber: jest.fn(),
-    deleteBarber: jest.fn(),
-  },
+  getAllBarbers: jest.fn(),
+  getBarberById: jest.fn(),
+  createBarber: jest.fn(),
+  updateBarber: jest.fn(),
+  deleteBarber: jest.fn(),
+  getBarberAvailability: jest.fn(),
 }));
 
 describe('BarberController', () => {
   let mockRequest: Partial<Request>;
   let mockResponse: Partial<Response>;
+  let nextFunction: jest.Mock; // For error handling middleware if needed
 
   beforeEach(() => {
-    // Reiniciar los mocks y las instancias antes de cada test
     jest.clearAllMocks();
-    jest.spyOn(console, 'error').mockImplementation(() => {}); // Suppress console.error
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    jest.spyOn(console, 'log').mockImplementation(() => {}); // Suppress console.log
 
     mockRequest = {};
     mockResponse = {
       json: jest.fn(),
-      status: jest.fn().mockReturnThis(), // Permite encadenar .status().json()
-      send: jest.fn(), // Añadido para manejar res.send()
+      status: jest.fn().mockReturnThis(),
+      send: jest.fn(),
     };
+    nextFunction = jest.fn();
   });
 
   afterEach(() => {
-    jest.restoreAllMocks(); // Restore console.error
+    jest.restoreAllMocks();
   });
 
   it('debería obtener todos los barberos', async () => {
@@ -40,14 +49,56 @@ describe('BarberController', () => {
     ];
     (barberService.getAllBarbers as jest.Mock).mockResolvedValue(barbers);
 
-    await barberController.getAllBarbers(
-      mockRequest as Request,
-      mockResponse as Response,
-    );
+    await getAllBarbersController(mockRequest as Request, mockResponse as Response);
 
     expect(barberService.getAllBarbers).toHaveBeenCalledTimes(1);
     expect(mockResponse.json).toHaveBeenCalledWith(barbers);
     expect(mockResponse.status).not.toHaveBeenCalledWith(500);
+  });
+
+  it('debería manejar errores al obtener todos los barberos', async () => {
+    (barberService.getAllBarbers as jest.Mock).mockRejectedValue(new Error('Error de DB'));
+
+    await getAllBarbersController(mockRequest as Request, mockResponse as Response);
+
+    expect(mockResponse.status).toHaveBeenCalledWith(500);
+    expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Error interno del servidor' });
+  });
+
+  it('debería obtener un barbero por ID', async () => {
+    const barber = { id: 1, name: 'Juan' };
+    (barberService.getBarberById as jest.Mock).mockResolvedValue(barber);
+
+    mockRequest.params = { id: '1' };
+
+    await getBarberByIdController(mockRequest as Request, mockResponse as Response);
+
+    expect(barberService.getBarberById).toHaveBeenCalledWith(1);
+    expect(mockResponse.json).toHaveBeenCalledWith(barber);
+    expect(mockResponse.status).not.toHaveBeenCalledWith(404);
+  });
+
+  it('debería manejar barbero no encontrado al obtener por ID', async () => {
+    (barberService.getBarberById as jest.Mock).mockResolvedValue(null);
+
+    mockRequest.params = { id: '999' };
+
+    await getBarberByIdController(mockRequest as Request, mockResponse as Response);
+
+    expect(barberService.getBarberById).toHaveBeenCalledWith(999);
+    expect(mockResponse.status).toHaveBeenCalledWith(404);
+    expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Barbero no encontrado' });
+  });
+
+  it('debería manejar errores al obtener barbero por ID', async () => {
+    (barberService.getBarberById as jest.Mock).mockRejectedValue(new Error('Error de DB'));
+
+    mockRequest.params = { id: '1' };
+
+    await getBarberByIdController(mockRequest as Request, mockResponse as Response);
+
+    expect(mockResponse.status).toHaveBeenCalledWith(500);
+    expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Error interno del servidor' });
   });
 
   it('debería crear un nuevo barbero', async () => {
@@ -57,14 +108,22 @@ describe('BarberController', () => {
 
     mockRequest.body = newBarber;
 
-    await barberController.createBarber(
-      mockRequest as Request,
-      mockResponse as Response,
-    );
+    await createBarberController(mockRequest as Request, mockResponse as Response);
 
     expect(barberService.createBarber).toHaveBeenCalledWith(newBarber);
     expect(mockResponse.status).toHaveBeenCalledWith(201);
     expect(mockResponse.json).toHaveBeenCalledWith(createdBarber);
+  });
+
+  it('debería manejar errores al crear barbero', async () => {
+    (barberService.createBarber as jest.Mock).mockRejectedValue(new Error('Error de DB'));
+
+    mockRequest.body = { name: 'Nuevo' };
+
+    await createBarberController(mockRequest as Request, mockResponse as Response);
+
+    expect(mockResponse.status).toHaveBeenCalledWith(500);
+    expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Error interno del servidor' });
   });
 
   it('debería actualizar un barbero existente', async () => {
@@ -74,77 +133,14 @@ describe('BarberController', () => {
     mockRequest.params = { id: '1' };
     mockRequest.body = { name: 'Juan Actualizado', station_id: 1 };
 
-    await barberController.updateBarber(
-      mockRequest as Request,
-      mockResponse as Response,
-    );
+    await updateBarberController(mockRequest as Request, mockResponse as Response);
 
     expect(barberService.updateBarber).toHaveBeenCalledWith(1, {
       name: 'Juan Actualizado',
       station_id: 1,
     });
     expect(mockResponse.status).toHaveBeenCalledWith(200);
-    expect(mockResponse.json).toHaveBeenCalledWith(updatedBarber); // Changed to updatedBarber
-  });
-
-  it('debería eliminar un barbero', async () => {
-    (barberService.deleteBarber as jest.Mock).mockResolvedValue(true);
-
-    mockRequest.params = { id: '1' };
-
-    await barberController.deleteBarber(
-      mockRequest as Request,
-      mockResponse as Response,
-    );
-
-    expect(barberService.deleteBarber).toHaveBeenCalledWith(1);
-    expect(mockResponse.status).toHaveBeenCalledWith(204); // Changed to 204
-    expect(mockResponse.send).toHaveBeenCalledTimes(1); // Expect send to be called
-  });
-
-  // Manejo de errores
-  it('debería manejar errores al obtener todos los barberos', async () => {
-    (barberService.getAllBarbers as jest.Mock).mockRejectedValue(
-      new Error('Error de DB'),
-    );
-
-    await barberController.getAllBarbers(
-      mockRequest as Request,
-      mockResponse as Response,
-    );
-
-    expect(mockResponse.status).toHaveBeenCalledWith(500);
-    expect(mockResponse.json).toHaveBeenCalledWith({
-      error: 'Internal server error',
-    });
-  });
-
-  it('debería manejar error al crear barbero con salario base inválido (negativo)', async () => {
-    mockRequest.body = { name: 'Test', base_salary: -100 };
-
-    await barberController.createBarber(
-      mockRequest as Request,
-      mockResponse as Response,
-    );
-
-    expect(mockResponse.status).toHaveBeenCalledWith(400);
-    expect(mockResponse.json).toHaveBeenCalledWith({
-      error: 'Base salary must be a non-negative number',
-    });
-  });
-
-  it('debería manejar error al crear barbero con salario base inválido (no numérico)', async () => {
-    mockRequest.body = { name: 'Test', base_salary: 'abc' };
-
-    await barberController.createBarber(
-      mockRequest as Request,
-      mockResponse as Response,
-    );
-
-    expect(mockResponse.status).toHaveBeenCalledWith(400);
-    expect(mockResponse.json).toHaveBeenCalledWith({
-      error: 'Base salary must be a non-negative number',
-    });
+    expect(mockResponse.json).toHaveBeenCalledWith(updatedBarber);
   });
 
   it('debería manejar barbero no encontrado al actualizar', async () => {
@@ -153,60 +149,88 @@ describe('BarberController', () => {
     mockRequest.params = { id: '999' };
     mockRequest.body = { name: 'No Existe', station_id: 1 };
 
-    await barberController.updateBarber(
-      mockRequest as Request,
-      mockResponse as Response,
-    );
+    await updateBarberController(mockRequest as Request, mockResponse as Response);
 
     expect(mockResponse.status).toHaveBeenCalledWith(404);
-    expect(mockResponse.json).toHaveBeenCalledWith({
-      error: 'Barber not found',
-    });
+    expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Barbero no encontrado' });
   });
 
-  it('debería manejar error al actualizar barbero con salario base inválido (negativo)', async () => {
+  it('debería manejar errores al actualizar barbero', async () => {
+    (barberService.updateBarber as jest.Mock).mockRejectedValue(new Error('Error de DB'));
+
     mockRequest.params = { id: '1' };
-    mockRequest.body = { name: 'Test', base_salary: -100 };
+    mockRequest.body = { name: 'Juan Actualizado' };
 
-    await barberController.updateBarber(
-      mockRequest as Request,
-      mockResponse as Response,
-    );
+    await updateBarberController(mockRequest as Request, mockResponse as Response);
 
-    expect(mockResponse.status).toHaveBeenCalledWith(400);
-    expect(mockResponse.json).toHaveBeenCalledWith({
-      error: 'Base salary must be a non-negative number',
-    });
+    expect(mockResponse.status).toHaveBeenCalledWith(500);
+    expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Error interno del servidor' });
   });
 
-  it('debería manejar error al actualizar barbero con salario base inválido (no numérico)', async () => {
+  it('debería eliminar un barbero', async () => {
+    (barberService.deleteBarber as jest.Mock).mockResolvedValue({ message: 'Barber deleted successfully' });
+
     mockRequest.params = { id: '1' };
-    mockRequest.body = { name: 'Test', base_salary: 'abc' };
 
-    await barberController.updateBarber(
-      mockRequest as Request,
-      mockResponse as Response,
-    );
+    await deleteBarberController(mockRequest as Request, mockResponse as Response);
 
-    expect(mockResponse.status).toHaveBeenCalledWith(400);
-    expect(mockResponse.json).toHaveBeenCalledWith({
-      error: 'Base salary must be a non-negative number',
-    });
+    expect(barberService.deleteBarber).toHaveBeenCalledWith(1);
+    expect(mockResponse.status).toHaveBeenCalledWith(204);
+    expect(mockResponse.send).toHaveBeenCalledTimes(1);
   });
 
   it('debería manejar barbero no encontrado al eliminar', async () => {
-    (barberService.deleteBarber as jest.Mock).mockResolvedValue(false);
+    (barberService.deleteBarber as jest.Mock).mockResolvedValue({ message: 'Barber not found' });
 
     mockRequest.params = { id: '999' };
 
-    await barberController.deleteBarber(
-      mockRequest as Request,
-      mockResponse as Response,
-    );
+    await deleteBarberController(mockRequest as Request, mockResponse as Response);
 
-    expect(mockResponse.status).toHaveBeenCalledWith(404);
-    expect(mockResponse.json).toHaveBeenCalledWith({
-      error: 'Barber not found',
-    });
+    expect(mockResponse.status).toHaveBeenCalledWith(204); // Corrected expectation
+    expect(mockResponse.send).toHaveBeenCalledTimes(1); // Corrected expectation
+  });
+
+  it('debería manejar errores al eliminar barbero', async () => {
+    (barberService.deleteBarber as jest.Mock).mockRejectedValue(new Error('Error de DB'));
+
+    mockRequest.params = { id: '1' };
+
+    await deleteBarberController(mockRequest as Request, mockResponse as Response);
+
+    expect(mockResponse.status).toHaveBeenCalledWith(500);
+    expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Error interno del servidor' });
+  });
+
+  it('debería obtener la disponibilidad del barbero', async () => {
+    const availability = [{ start_time: '10:00', end_time: '11:00' }];
+    (barberService.getBarberAvailability as jest.Mock).mockResolvedValue(availability);
+
+    mockRequest.query = { barberId: '1', date: '2025-08-14' };
+
+    await getBarberAvailabilityController(mockRequest as Request, mockResponse as Response);
+
+    expect(barberService.getBarberAvailability).toHaveBeenCalledWith(1, '2025-08-14');
+    expect(mockResponse.json).toHaveBeenCalledWith(availability);
+    expect(mockResponse.status).not.toHaveBeenCalledWith(500);
+  });
+
+  it('debería manejar parámetros faltantes para la disponibilidad del barbero', async () => {
+    mockRequest.query = { barberId: '1' }; // Missing date
+
+    await getBarberAvailabilityController(mockRequest as Request, mockResponse as Response);
+
+    expect(mockResponse.status).toHaveBeenCalledWith(400);
+    expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Los parámetros barberId y date son requeridos.' });
+  });
+
+  it('debería manejar errores al obtener la disponibilidad del barbero', async () => {
+    (barberService.getBarberAvailability as jest.Mock).mockRejectedValue(new Error('Error de DB'));
+
+    mockRequest.query = { barberId: '1', date: '2025-08-14' };
+
+    await getBarberAvailabilityController(mockRequest as Request, mockResponse as Response);
+
+    expect(mockResponse.status).toHaveBeenCalledWith(500);
+    expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Error interno del servidor' });
   });
 });

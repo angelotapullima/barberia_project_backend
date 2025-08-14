@@ -2,7 +2,7 @@ import setup from '../database';
 
 const pool = setup();
 
-interface Service {
+export interface Service {
   id?: number;
   name: string;
   description?: string | null;

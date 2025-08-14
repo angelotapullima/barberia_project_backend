@@ -5,7 +5,7 @@ import { Pool, PoolClient } from 'pg';
 const pool = setup();
 
 // --- INTERFACES ---
-interface SaleItem {
+export interface SaleItem {
   id?: number;
   sale_id?: number;
   item_id: number; // This is the service or product id
@@ -17,7 +17,7 @@ interface SaleItem {
   quantity: number;
 }
 
-interface Sale {
+export interface Sale {
   id?: number;
   sale_date: string;
   total_amount: number;

@@ -23,15 +23,21 @@ export const createBarber = async (barber: any) => {
 
 export const updateBarber = async (id: number, barber: any) => {
   const { name, email, phone, specialty, photo_url, station_id, base_salary } = barber;
-  await pool.query(
+  const result = await pool.query( // Capture the result to check rowCount
     'UPDATE barbers SET name = $1, email = $2, phone = $3, specialty = $4, photo_url = $5, station_id = $6, base_salary = $7, updated_at = NOW() WHERE id = $8',
     [name, email, phone, specialty, photo_url, station_id, base_salary, id]
   );
+  if (result.rowCount === 0) { // If no rows were updated
+    return null; // Return null as per test expectation
+  }
   return { id, ...barber };
 };
 
 export const deleteBarber = async (id: number) => {
-  await pool.query('DELETE FROM barbers WHERE id = $1', [id]);
+  const result = await pool.query('DELETE FROM barbers WHERE id = $1', [id]); // Capture the result to check rowCount
+  if (result.rowCount === 0) { // If no rows were deleted
+    return { message: 'Barber not found' }; // Return 'Barber not found' as per test expectation
+  }
   return { message: 'Barber deleted successfully' };
 };
 
