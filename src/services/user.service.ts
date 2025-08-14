@@ -1,117 +1,106 @@
-import setupDatabase from '../database';
-import { Database } from 'sqlite';
+import setup from '../database';
+import bcrypt from 'bcrypt';
 
-// Interfaz para tipar el objeto de usuario
+const pool = setup();
+
+// --- INTERFACE ---
 interface User {
   id: number;
   name: string;
   email: string;
-  password?: string; // La contraseña es opcional en los objetos que devolvemos
+  password?: string; // Password hash, optional in return values
   role: string;
 }
 
-class UserService {
-  private db!: Database;
+// --- PUBLIC API ---
 
-  constructor() {
-    setupDatabase().then((db) => {
-      this.db = db;
-    });
+export const findByEmail = async (email: string): Promise<User | undefined> => {
+  const { rows } = await pool.query(
+    'SELECT * FROM users WHERE email = $1',
+    [email],
+  );
+  return rows[0];
+};
+
+export const findById = async (id: number): Promise<Omit<User, 'password'> | undefined> => {
+  const { rows } = await pool.query(
+    'SELECT id, name, email, role FROM users WHERE id = $1',
+    [id],
+  );
+  return rows[0];
+};
+
+export const updatePassword = async (
+  id: number,
+  newPasswordHash: string,
+): Promise<boolean> => {
+  const { rowCount } = await pool.query(
+    'UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2',
+    [newPasswordHash, id],
+  );
+  return (rowCount ?? 0) > 0;
+};
+
+export const getAllUsers = async (): Promise<Omit<User, 'password'>[]> => {
+  const { rows } = await pool.query('SELECT id, name, email, role FROM users ORDER BY name');
+  return rows;
+};
+
+export const createUser = async (userData: Omit<User, 'id'>): Promise<Omit<User, 'password'> | {error: string}> => {
+  const { name, email, password, role } = userData;
+  if (!password) {
+      return { error: 'Password is required' };
   }
-
-  // Encuentra un usuario por su email. Crucial para el login.
-  public async findByEmail(email: string): Promise<User | undefined> {
-    const user = await this.db.get(
-      'SELECT * FROM users WHERE email = ?',
-      email,
-    );
-    return user;
-  }
-
-  // Encuentra un usuario por su ID. Útil para obtener el perfil.
-  public async findById(id: number): Promise<User | undefined> {
-    // Excluimos la contraseña por seguridad
-    const user = await this.db.get(
-      'SELECT id, name, email, role FROM users WHERE id = ?',
-      id,
-    );
-    return user;
-  }
-
-  // Actualiza la contraseña de un usuario
-  public async updatePassword(
-    id: number,
-    newPasswordHash: string,
-  ): Promise<boolean> {
-    const result = await this.db.run(
-      'UPDATE users SET password = ? WHERE id = ?',
-      [newPasswordHash, id],
-    );
-    return (result.changes ?? 0) > 0;
-  }
-
-  // Obtiene todos los usuarios (excluyendo contraseñas)
-  public async getAllUsers(): Promise<User[]> {
-    const users = await this.db.all('SELECT id, name, email, role FROM users');
-    return users;
-  }
-
-  // Crea un nuevo usuario
-  public async createUser(userData: {
-    name: string;
-    email: string;
-    password_hash: string;
-    role: string;
-  }): Promise<User> {
-    const { name, email, password_hash, role } = userData;
-    const result = await this.db.run(
-      'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
+  const password_hash = await bcrypt.hash(password, 10);
+  
+  try {
+    const { rows } = await pool.query(
+      'INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4) RETURNING id, name, email, role',
       [name, email, password_hash, role],
     );
-    if (typeof result.lastID !== 'number') {
-      throw new Error('Failed to retrieve last inserted user ID.');
-    }
-    return { id: result.lastID, name, email, role };
+    return rows[0];
+  } catch (error: any) {
+      if (error.code === '23505') { // Unique violation for email
+          return { error: 'El correo electrónico ya está en uso.' };
+      }
+      throw error;
+  }
+};
+
+export const updateUser = async (
+  id: number,
+  userData: Partial<Omit<User, 'id' | 'password'>>,
+): Promise<Omit<User, 'password'> | null> => {
+  const fields: string[] = [];
+  const params: any[] = [];
+  let paramIndex = 1;
+
+  for (const [key, value] of Object.entries(userData)) {
+      if (value !== undefined) {
+          fields.push(`${key} = $${paramIndex++}`);
+          params.push(value);
+      }
   }
 
-  // Actualiza los detalles de un usuario
-  public async updateUser(
-    id: number,
-    userData: { name?: string; email?: string; role?: string },
-  ): Promise<boolean> {
-    const fields = [];
-    const params = [];
-
-    if (userData.name !== undefined) {
-      fields.push('name = ?');
-      params.push(userData.name);
-    }
-    if (userData.email !== undefined) {
-      fields.push('email = ?');
-      params.push(userData.email);
-    }
-    if (userData.role !== undefined) {
-      fields.push('role = ?');
-      params.push(userData.role);
-    }
-
-    if (fields.length === 0) {
-      return false; // No hay nada que actualizar
-    }
-
-    params.push(id);
-    const result = await this.db.run(
-      `UPDATE users SET ${fields.join(', ')} WHERE id = ?`,
-      params,
-    );
-    return (result.changes ?? 0) > 0;
+  if (fields.length === 0) {
+    return findById(id).then(user => user || null);
   }
 
-  // Elimina un usuario
-  public async deleteUser(id: number): Promise<boolean> {
-    const result = await this.db.run('DELETE FROM users WHERE id = ?', id);
-    return (result.changes ?? 0) > 0;
+  params.push(id);
+  const sql = `UPDATE users SET ${fields.join(', ')}, updated_at = NOW() WHERE id = $${paramIndex} RETURNING id, name, email, role`;
+  
+  try {
+    const { rows } = await pool.query(sql, params);
+    return rows[0] || null;
+  } catch (error: any) {
+      if (error.code === '23505') {
+          throw new Error('El correo electrónico ya está en uso.');
+      }
+      throw error;
   }
-}
+};
 
-export const userService = new UserService();
+export const deleteUser = async (id: number): Promise<boolean> => {
+  const { rowCount } = await pool.query('DELETE FROM users WHERE id = $1', [id]);
+  return (rowCount ?? 0) > 0;
+};

@@ -1,25 +1,22 @@
 import { Router } from 'express';
-import { reportController } from '../controllers/report.controller';
+import {
+  getComprehensiveSalesReportController,
+  getServicesProductsSalesReportController,
+  getStationUsageReportController,
+  getCustomerFrequencyReportController,
+  getPeakHoursReportController,
+  getBarberPaymentsReportController,
+  getDetailedBarberServiceSalesReportController,
+} from '../controllers/report.controller';
 
 const router = Router();
 
-router.get('/', reportController.getReport);
-router.get(
-  '/comprehensive-sales',
-  reportController.getComprehensiveSalesReport,
-);
-router.get(
-  '/services-products-sales',
-  reportController.getServicesProductsSalesReport,
-);
-
-// Rutas para los nuevos reportes
-router.get('/station-usage', reportController.getStationUsageReport);
-router.get('/customer-frequency', reportController.getCustomerFrequencyReport);
-router.get('/peak-hours', reportController.getPeakHoursReport);
-
-router.get('/barber-payments', reportController.getBarberPaymentsReport);
-
-router.get('/detailed-barber-service-sales', reportController.getDetailedBarberServiceSales);
+router.get('/comprehensive-sales', getComprehensiveSalesReportController);
+router.get('/services-products-sales', getServicesProductsSalesReportController);
+router.get('/station-usage', getStationUsageReportController);
+router.get('/customer-frequency', getCustomerFrequencyReportController);
+router.get('/peak-hours', getPeakHoursReportController);
+router.get('/barber-payments', getBarberPaymentsReportController);
+router.get('/detailed-barber-service-sales', getDetailedBarberServiceSalesReportController);
 
 export default router;

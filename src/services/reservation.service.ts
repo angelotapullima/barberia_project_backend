@@ -1,7 +1,10 @@
-import setupDatabase from '../database';
-import { Database } from 'sqlite';
-import { saleService } from './sale.service'; // Import saleService
+import setup from '../database';
+import { createSale } from './sale.service';
+import { PoolClient } from 'pg';
 
+const pool = setup();
+
+// Keep interfaces for type safety
 interface SaleItem {
   id?: number;
   sale_id?: number;
@@ -38,265 +41,182 @@ interface Reservation {
   sale?: Sale;
 }
 
-export class ReservationService {
-  private db!: Database;
+export const getAllReservations = async (
+  startDate?: string,
+  endDate?: string,
+): Promise<Reservation[]> => {
+  let query = `
+    SELECT 
+        r.id, r.barber_id, b.name as barber_name,
+        r.station_id, r.client_name, r.client_phone, r.client_email,
+        r.start_time, r.end_time, r.service_id, s.name as service_name,
+        r.status, r.notes, r.created_at,
+        sale.id as sale_id, sale.total_amount as sale_total,
+        sale.payment_method as sale_payment_method,
+        si.id as sale_item_id, si.item_name as sale_item_name,
+        si.price_at_sale as sale_item_price, si.quantity as sale_item_quantity
+    FROM reservations r
+    JOIN barbers b ON r.barber_id = b.id
+    JOIN services s ON r.service_id = s.id
+    LEFT JOIN sales sale ON r.id = sale.reservation_id
+    LEFT JOIN sale_items si ON sale.id = si.sale_id
+  `;
+  const params: any[] = [];
 
-  constructor(db?: Database) {
-    if (db) {
-      this.db = db;
-    } else {
-      setupDatabase().then((db: Database) => {
-        this.db = db;
-      });
-    }
+  if (startDate && endDate) {
+    query += ' WHERE r.start_time::date BETWEEN $1 AND $2';
+    params.push(startDate, endDate);
   }
 
-  async getAllReservations(
-    startDate?: string,
-    endDate?: string,
-  ): Promise<Reservation[]> {
-    let query = `
-      SELECT 
-          r.id, r.barber_id, b.name as barber_name,
-          r.client_name, r.client_phone, r.client_email,
-          r.start_time, r.end_time, r.service_id, s.name as service_name,
-          r.status, r.notes, r.created_at,
-          sale.id as sale_id, sale.total_amount as sale_total,
-          sale.payment_method as sale_payment_method,
-          si.id as sale_item_id, si.item_name as sale_item_name,
-          si.price_at_sale as sale_item_price, si.quantity as sale_item_quantity
-      FROM reservations r
-      JOIN barbers b ON r.barber_id = b.id
-      JOIN services s ON r.service_id = s.id
-      LEFT JOIN sales sale ON r.id = sale.reservation_id
-      LEFT JOIN sale_items si ON sale.id = si.sale_id
-    `;
-    const params: any[] = [];
+  query += ' ORDER BY r.start_time DESC';
 
-    if (startDate && endDate) {
-      query += ' WHERE date(r.start_time) BETWEEN ? AND ?';
-      params.push(startDate, endDate);
+  const { rows } = await pool.query(query, params);
+  const reservationsMap = new Map<number, Reservation>();
+
+  for (const row of rows) {
+    if (!reservationsMap.has(row.id)) {
+      reservationsMap.set(row.id, {
+        id: row.id,
+        barber_id: row.barber_id,
+        barber_name: row.barber_name,
+        station_id: row.station_id,
+        client_name: row.client_name,
+        client_phone: row.client_phone,
+        client_email: row.client_email,
+        start_time: row.start_time,
+        end_time: row.end_time,
+        service_id: row.service_id,
+        service_name: row.service_name,
+        status: row.status,
+        notes: row.notes,
+        created_at: row.created_at,
+        sale: row.sale_id
+          ? {
+              id: row.sale_id,
+              total_amount: row.sale_total,
+              payment_method: row.sale_payment_method,
+              sale_items: [],
+            }
+          : undefined,
+      });
     }
 
-    query += ' ORDER BY r.start_time DESC';
-
-    const rows = await this.db.all(query, params);
-    const reservationsMap = new Map<number, Reservation>();
-
-    for (const row of rows) {
-      if (!reservationsMap.has(row.id)) {
-        reservationsMap.set(row.id, {
-          id: row.id,
-          barber_id: row.barber_id,
-          barber_name: row.barber_name,
-          client_name: row.client_name,
-          client_phone: row.client_phone,
-          client_email: row.client_email,
-          start_time: row.start_time,
-          end_time: row.end_time,
-          service_id: row.service_id,
-          service_name: row.service_name,
-          status: row.status,
-          notes: row.notes,
-          created_at: row.created_at,
-          station_id: row.station_id,
-          sale: row.sale_id
-            ? {
-                id: row.sale_id,
-                total_amount: row.sale_total,
-                payment_method: row.sale_payment_method,
-                sale_items: [],
-              }
-            : undefined,
-        });
-      }
-
-      if (row.sale_id) {
-        const reservation = reservationsMap.get(row.id)!;
-        if (reservation.sale && row.sale_item_id) {
-          // Ensure item is not already added
-          const existingItem = reservation.sale.sale_items.find(
-            (item) => item.id === row.sale_item_id,
-          );
-          if (!existingItem) {
-            reservation.sale.sale_items.push({
-              id: row.sale_item_id,
-              item_id: row.sale_item_id,
-              item_name: row.sale_item_name,
-              price: row.sale_item_price,
-              price_at_sale: row.sale_item_price,
-              quantity: row.sale_item_quantity,
-            });
-          }
+    if (row.sale_id) {
+      const reservation = reservationsMap.get(row.id)!;
+      if (reservation.sale && row.sale_item_id) {
+        const existingItem = reservation.sale.sale_items.find(
+          (item) => item.id === row.sale_item_id,
+        );
+        if (!existingItem) {
+          reservation.sale.sale_items.push({
+            id: row.sale_item_id,
+            item_id: row.sale_item_id, // This is actually the sale_item_id
+            item_name: row.sale_item_name,
+            price: row.sale_item_price, // This is the price_at_sale
+            price_at_sale: row.sale_item_price,
+            quantity: row.sale_item_quantity,
+          });
         }
       }
     }
-
-    return Array.from(reservationsMap.values());
   }
 
-  async getReservationById(id: number): Promise<Reservation | undefined> {
-    const reservation = await this.db.get(
-      `
-      SELECT 
-          r.id, r.barber_id, b.name as barber_name,
-          r.station_id,
-          r.client_name, r.client_phone, r.client_email,
-          r.start_time, r.end_time, r.service_id, s.name as service_name,
-          r.status, r.notes, r.created_at
-      FROM reservations r
-      JOIN barbers b ON r.barber_id = b.id
-      JOIN services s ON r.service_id = s.id
-      WHERE r.id = ?
-    `,
-      id,
-    );
-    return reservation;
-  }
+  return Array.from(reservationsMap.values());
+};
 
-  async createReservation(reservation: Reservation): Promise<Reservation> {
-    const {
+export const getReservationById = async (id: number): Promise<Reservation | null> => {
+  const { rows } = await pool.query(
+    `
+    SELECT 
+        r.id, r.barber_id, b.name as barber_name,
+        r.station_id,
+        r.client_name, r.client_phone, r.client_email,
+        r.start_time, r.end_time, r.service_id, s.name as service_name,
+        r.status, r.notes, r.created_at
+    FROM reservations r
+    JOIN barbers b ON r.barber_id = b.id
+    JOIN services s ON r.service_id = s.id
+    WHERE r.id = $1
+  `,
+    [id],
+  );
+  return rows[0] || null;
+};
+
+export const createReservation = async (reservation: Omit<Reservation, 'id'>): Promise<Reservation> => {
+  const {
+    barber_id,
+    station_id,
+    client_name,
+    client_phone,
+    client_email,
+    start_time,
+    end_time,
+    service_id,
+    status,
+    notes,
+  } = reservation;
+  const { rows } = await pool.query(
+    'INSERT INTO reservations (barber_id, station_id, client_name, client_phone, client_email, start_time, end_time, service_id, status, notes) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *',
+    [
       barber_id,
       station_id,
       client_name,
-      client_phone,
-      client_email,
+      client_phone || null,
+      client_email || null,
       start_time,
       end_time,
       service_id,
-      status,
-      notes,
-    } = reservation; // Added station_id
-    const result = await this.db.run(
-      'INSERT INTO reservations (barber_id, station_id, client_name, client_phone, client_email, start_time, end_time, service_id, status, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', // Added station_id column
-      [
-        barber_id,
-        station_id,
-        client_name,
-        client_phone || null,
-        client_email || null,
-        start_time,
-        end_time,
-        service_id,
-        status || 'pending',
-        notes || null,
-      ], // Added station_id value
-    );
-    return { id: result.lastID, ...reservation };
+      status || 'pending',
+      notes || null,
+    ],
+  );
+  return rows[0];
+};
+
+export const updateReservation = async (
+  id: number,
+  reservation: Partial<Reservation>,
+): Promise<Reservation | null> => {
+  const fields: string[] = [];
+  const params: any[] = [];
+  let paramIndex = 1;
+
+  // Dynamically build the SET part of the query
+  for (const [key, value] of Object.entries(reservation)) {
+    if (value !== undefined) {
+      fields.push(`${key} = $${paramIndex++}`);
+      params.push(value);
+    }
   }
 
-  async updateReservation(
-    id: number,
-    reservation: Partial<Reservation>,
-  ): Promise<void> {
-    const fields = [];
-    const params = [];
-
-    if (reservation.barber_id !== undefined) {
-      fields.push('barber_id = ?');
-      params.push(reservation.barber_id);
-    }
-    if (reservation.client_name !== undefined) {
-      fields.push('client_name = ?');
-      params.push(reservation.client_name);
-    }
-    if (reservation.client_phone !== undefined) {
-      fields.push('client_phone = ?');
-      params.push(reservation.client_phone);
-    }
-    if (reservation.client_email !== undefined) {
-      fields.push('client_email = ?');
-      params.push(reservation.client_email);
-    }
-    if (reservation.start_time !== undefined) {
-      fields.push('start_time = ?');
-      params.push(reservation.start_time);
-    }
-    if (reservation.end_time !== undefined) {
-      fields.push('end_time = ?');
-      params.push(reservation.end_time);
-    }
-    if (reservation.service_id !== undefined) {
-      fields.push('service_id = ?');
-      params.push(reservation.service_id);
-    }
-    if (reservation.status !== undefined) {
-      fields.push('status = ?');
-      params.push(reservation.status);
-    }
-    if (reservation.notes !== undefined) {
-      fields.push('notes = ?');
-      params.push(reservation.notes);
-    }
-    if (reservation.station_id !== undefined) {
-      // Added station_id to update
-      fields.push('station_id = ?');
-      params.push(reservation.station_id);
-    }
-
-    if (fields.length === 0) {
-      return; // Nothing to update
-    }
-
-    params.push(id);
-    const sql = `UPDATE reservations SET ${fields.join(', ')} WHERE id = ?`;
-    await this.db.run(sql, ...params);
+  if (fields.length === 0) {
+    return getReservationById(id); // Nothing to update, return current state
   }
 
-  async deleteReservation(id: number): Promise<void> {
-    await this.db.run('DELETE FROM reservations WHERE id = ?', id);
-  }
+  params.push(id);
+  const sql = `UPDATE reservations SET ${fields.join(', ')}, updated_at = NOW() WHERE id = $${paramIndex} RETURNING *`;
+  
+  const { rows } = await pool.query(sql, params);
+  return rows[0] || null;
+};
 
-  async getReservationCount(
-    startDate: string,
-    endDate: string,
-  ): Promise<number> {
-    const result = await this.db.get(
-      `
-      SELECT COUNT(*) as count
-      FROM reservations
-      WHERE start_time BETWEEN ? AND ?
-    `,
-      [startDate, endDate],
-    );
-    return result.count;
+export const deleteReservation = async (id: number): Promise<{ message: string } | { error: string }> => {
+  const result = await pool.query('DELETE FROM reservations WHERE id = $1', [id]);
+  if (result.rowCount === 0) {
+    return { error: 'Reservation not found' };
   }
+  return { message: 'Reservation deleted successfully' };
+};
 
-  async getCompletedReservationCount(
-    startDate: string,
-    endDate: string,
-  ): Promise<number> {
-    const result = await this.db.get(
-      `
-      SELECT COUNT(*) as count
-      FROM reservations
-      WHERE start_time BETWEEN ? AND ? AND status = 'completed'
-    `,
-      [startDate, endDate],
-    );
-    return result.count;
-  }
 
-  async getCompletedReservations(
-    startDate: string,
-    endDate: string,
-  ): Promise<Reservation[]> {
-    const query = `
-      SELECT 
-          r.id, r.barber_id, b.name as barber_name,
-          r.station_id, st.name as station_name,
-          r.client_name, r.client_phone, r.start_time, r.end_time, r.status, r.created_at
-      FROM reservations r
-      JOIN barbers b ON r.barber_id = b.id
-      JOIN stations st ON r.station_id = st.id
-      WHERE date(r.start_time) BETWEEN ? AND ? AND r.status = 'completed'
-      ORDER BY r.start_time DESC
-    `;
-    return this.db.all(query, [startDate, endDate]);
-  }
+export const completeReservationAndCreateSale = async (reservationId: number): Promise<any> => {
+  const client: PoolClient = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  async completeReservationAndCreateSale(reservationId: number): Promise<any> {
-    const reservation = await this.getReservationById(reservationId);
+    const reservationResult = await client.query('SELECT * FROM reservations WHERE id = $1 FOR UPDATE', [reservationId]);
+    const reservation = reservationResult.rows[0];
 
     if (!reservation) {
       throw new Error('Reservation not found.');
@@ -306,51 +226,43 @@ export class ReservationService {
       throw new Error('Reservation is already completed.');
     }
 
-    // Start a transaction for atomicity
-    await this.db.run('BEGIN TRANSACTION');
-    try {
-      // 1. Update reservation status to 'completed'
-      await this.updateReservation(reservationId, { status: 'completed' });
+    await client.query("UPDATE reservations SET status = 'completed', updated_at = NOW() WHERE id = $1", [reservationId]);
 
-      // 2. Create a sale from the reservation
-      // Fetch service details to get price for sale_items
-      const service = await this.db.get(
-        'SELECT id, name, price, type FROM services WHERE id = ?',
-        reservation.service_id,
-      );
-      if (!service) {
-        throw new Error('Service not found for reservation.');
-      }
-
-      const saleDate = new Date().toISOString().split('T')[0]; // Current date for the sale
-      const totalAmount = service.price; // Assuming one service per reservation for simplicity
-
-      const newSale = await saleService.createSale({
-        sale_date: saleDate,
-        total_amount: totalAmount,
-        customer_name: reservation.client_name,
-        payment_method: 'cash', // Default payment method for now
-        reservation_id: reservation.id, // Link sale to reservation
-        sale_items: [
-          {
-            item_id: service.id,
-            price: service.price,
-            quantity: 1,
-            price_at_sale: service.price,
-            item_name: service.name,
-            type: service.type,
-          },
-        ],
-      });
-
-      await this.db.run('COMMIT');
-      return newSale;
-    } catch (error) {
-      await this.db.run('ROLLBACK');
-      console.error('Error completing reservation and creating sale:', error);
-      throw error; // Re-throw the error after rollback
+    const serviceResult = await client.query('SELECT id, name, price, type FROM services WHERE id = $1', [reservation.service_id]);
+    const service = serviceResult.rows[0];
+    if (!service) {
+      throw new Error('Service not found for reservation.');
     }
-  }
-}
 
-export const reservationService = new ReservationService();
+    const saleDate = new Date().toISOString();
+    const totalAmount = service.price;
+
+    const newSale = await createSale({
+      sale_date: saleDate,
+      total_amount: totalAmount,
+      customer_name: reservation.client_name,
+      payment_method: 'cash', 
+      reservation_id: reservation.id,
+      sale_items: [
+        {
+          item_id: service.id,
+          service_id: service.id, // Make sure service_id is passed
+          item_type: service.type,
+          item_name: service.name,
+          price: service.price,
+          price_at_sale: service.price,
+          quantity: 1,
+        },
+      ],
+    }, client); // Pass the client to use the same transaction
+
+    await client.query('COMMIT');
+    return newSale;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error completing reservation and creating sale:', error);
+    throw error; // Re-throw the error after rollback
+  } finally {
+    client.release();
+  }
+};

@@ -1,64 +1,46 @@
-import setupDatabase from '../database';
-import { Database } from 'sqlite';
+import setup from '../database';
 
-interface Barber {
-  id?: number;
-  name: string;
-  email?: string; // Added email
-  station_id?: number;
-  base_salary?: number;
-  station_name?: string;
-}
+const pool = setup();
 
-export class BarberService {
-  private db!: Database;
+export const getAllBarbers = async () => {
+  const result = await pool.query('SELECT * FROM barbers ORDER BY id ASC');
+  return result.rows;
+};
 
-  constructor(db?: Database) {
-    if (db) {
-      this.db = db;
-    } else {
-      setupDatabase().then((db: Database) => {
-        this.db = db;
-      });
-    }
-  }
+export const getBarberById = async (id: number) => {
+  const result = await pool.query('SELECT * FROM barbers WHERE id = $1', [id]);
+  return result.rows[0];
+};
 
-  async getAllBarbers(): Promise<Barber[]> {
-    const barbers = await this.db.all('SELECT b.* FROM barbers b');
-    return barbers;
-  }
+export const createBarber = async (barber: any) => {
+  const { name, email, phone, specialty, photo_url, station_id, base_salary } = barber;
+  const result = await pool.query(
+    'INSERT INTO barbers (name, email, phone, specialty, photo_url, station_id, base_salary) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+    [name, email, phone, specialty, photo_url, station_id, base_salary]
+  );
+  return { id: result.rows[0].id, ...barber };
+};
 
-  async createBarber(barber: Barber): Promise<Barber> {
-    const { name, email, station_id, base_salary } = barber;
-    const result = await this.db.run(
-      'INSERT INTO barbers (name, email, station_id, base_salary) VALUES (?, ?, ?, ?)',
-      [name, email || null, station_id || null, base_salary || 1300],
-    );
-    return {
-      id: result.lastID,
-      name,
-      email,
-      station_id,
-      base_salary: base_salary || 1300,
-    };
-  }
+export const updateBarber = async (id: number, barber: any) => {
+  const { name, email, phone, specialty, photo_url, station_id, base_salary } = barber;
+  await pool.query(
+    'UPDATE barbers SET name = $1, email = $2, phone = $3, specialty = $4, photo_url = $5, station_id = $6, base_salary = $7, updated_at = NOW() WHERE id = $8',
+    [name, email, phone, specialty, photo_url, station_id, base_salary, id]
+  );
+  return { id, ...barber };
+};
 
-  async updateBarber(id: number, barber: Barber): Promise<Barber | null> {
-    const { name, email, station_id, base_salary } = barber;
-    const result = await this.db.run(
-      'UPDATE barbers SET name = ?, email = ?, station_id = ?, base_salary = ? WHERE id = ?',
-      [name, email, station_id, base_salary, id],
-    );
-    if (result.changes === 0) {
-      return null;
-    }
-    return { id, name, email, station_id, base_salary };
-  }
+export const deleteBarber = async (id: number) => {
+  await pool.query('DELETE FROM barbers WHERE id = $1', [id]);
+  return { message: 'Barber deleted successfully' };
+};
 
-  async deleteBarber(id: number): Promise<boolean> {
-    const result = await this.db.run('DELETE FROM barbers WHERE id = ?', id);
-    return result.changes !== undefined && result.changes > 0;
-  }
-}
-
-export const barberService = new BarberService();
+export const getBarberAvailability = async (barberId: number, date: string) => {
+  const query = `
+    SELECT start_time, end_time
+    FROM reservations
+    WHERE barber_id = $1 AND DATE(start_time) = $2
+  `;
+  const result = await pool.query(query, [barberId, date]);
+  return result.rows;
+};

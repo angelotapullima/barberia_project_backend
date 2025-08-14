@@ -1,11 +1,23 @@
 import { Router } from 'express';
-import { barberController } from '../controllers/barber.controller';
+import {
+  getAllBarbersController,
+  getBarberByIdController,
+  createBarberController,
+  updateBarberController,
+  deleteBarberController,
+  getBarberAvailabilityController
+} from '../controllers/barber.controller';
 
 const router = Router();
 
-router.get('/', barberController.getAllBarbers);
-router.post('/', barberController.createBarber);
-router.put('/:id', barberController.updateBarber);
-router.delete('/:id', barberController.deleteBarber);
+// La ruta de disponibilidad debe ir antes de la ruta con el parámetro :id
+// para evitar que 'availability' sea tratado como un id.
+router.get('/availability', getBarberAvailabilityController);
+
+router.get('/', getAllBarbersController);
+router.get('/:id', getBarberByIdController);
+router.post('/', createBarberController);
+router.put('/:id', updateBarberController);
+router.delete('/:id', deleteBarberController);
 
 export default router;

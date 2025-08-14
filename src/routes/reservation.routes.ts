@@ -1,21 +1,23 @@
 import { Router } from 'express';
-import { reservationController } from '../controllers/reservation.controller';
+import {
+  getAllReservationsController,
+  getReservationByIdController,
+  createReservationController,
+  updateReservationController,
+  deleteReservationController,
+  completeReservationController,
+} from '../controllers/reservation.controller';
 
 const router = Router();
 
-// Specific routes should come before general routes with parameters
-router.get('/completed', reservationController.getCompletedReservations);
-router.get('/count', reservationController.getReservationCount);
-router.get(
-  '/count-completed',
-  reservationController.getCompletedReservationCount,
-);
+// Rutas para el CRUD de reservaciones
+router.get('/', getAllReservationsController);
+router.get('/:id', getReservationByIdController);
+router.post('/', createReservationController);
+router.put('/:id', updateReservationController);
+router.delete('/:id', deleteReservationController);
 
-router.get('/:id', reservationController.getReservationById); // This should come after specific routes
-router.get('/', reservationController.getAllReservations);
-router.post('/', reservationController.createReservation);
-router.put('/:id', reservationController.updateReservation);
-router.post('/:id/complete', reservationController.completeReservation); // New route to complete reservation and create sale
-router.delete('/:id', reservationController.deleteReservation);
+// Ruta para marcar una reservación como completada y generar la venta
+router.post('/:id/complete', completeReservationController);
 
 export default router;

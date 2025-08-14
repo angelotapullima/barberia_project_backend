@@ -1,92 +1,89 @@
 import { Request, Response } from 'express';
-import { barberService } from '../services/barber.service';
+import {
+  getAllBarbers,
+  getBarberById,
+  createBarber,
+  updateBarber,
+  deleteBarber,
+  getBarberAvailability
+} from '../services/barber.service';
 
-class BarberController {
-  async getAllBarbers(req: Request, res: Response): Promise<void> {
-    try {
-      const barbers = await barberService.getAllBarbers();
-      res.json(barbers);
-    } catch (error) {
-      console.error('Error getting barbers:', error);
-      res.status(500).json({ error: 'Internal server error' });
-    }
+export const getAllBarbersController = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const barbers = await getAllBarbers();
+    res.json(barbers);
+  } catch (error) {
+    console.error('Error getting barbers:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
   }
+};
 
-  async createBarber(req: Request, res: Response): Promise<void> {
-    const { name, station_id, base_salary } = req.body;
-    if (!name) {
-      res.status(400).json({ error: 'Name is required' });
-      return;
-    }
-    if (
-      base_salary !== undefined &&
-      (typeof base_salary !== 'number' || base_salary < 0)
-    ) {
-      res
-        .status(400)
-        .json({ error: 'Base salary must be a non-negative number' });
-      return;
-    }
-    try {
-      const newBarber = await barberService.createBarber({
-        name,
-        station_id,
-        base_salary,
-      });
-      res.status(201).json(newBarber);
-    } catch (error) {
-      console.error('Error creating barber:', error);
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  }
-
-  async updateBarber(req: Request, res: Response): Promise<void> {
-    const { name, station_id, base_salary } = req.body;
-    const { id } = req.params;
-    if (!name) {
-      res.status(400).json({ error: 'Name is required' });
-      return;
-    }
-    if (
-      base_salary !== undefined &&
-      (typeof base_salary !== 'number' || base_salary < 0)
-    ) {
-      res
-        .status(400)
-        .json({ error: 'Base salary must be a non-negative number' });
-      return;
-    }
-    try {
-      const updatedBarber = await barberService.updateBarber(Number(id), {
-        name,
-        station_id,
-        base_salary,
-      });
-      if (!updatedBarber) {
-        res.status(404).json({ error: 'Barber not found' });
-        return;
-      }
-      res.status(200).json(updatedBarber);
-    } catch (error) {
-      console.error('Error updating barber:', error);
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  }
-
-  async deleteBarber(req: Request, res: Response): Promise<void> {
+export const getBarberByIdController = async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
     try {
-      const deleted = await barberService.deleteBarber(Number(id));
-      if (!deleted) {
-        res.status(404).json({ error: 'Barber not found' });
-        return;
-      }
-      res.status(204).send();
+        const barber = await getBarberById(Number(id));
+        if (barber) {
+            res.json(barber);
+        } else {
+            res.status(404).json({ message: 'Barbero no encontrado' });
+        }
     } catch (error) {
-      console.error('Error deleting barber:', error);
-      res.status(500).json({ error: 'Internal server error' });
+        console.error(`Error getting barber ${id}:`, error);
+        res.status(500).json({ message: 'Error interno del servidor' });
     }
-  }
-}
+};
 
-export const barberController = new BarberController();
+export const createBarberController = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const newBarber = await createBarber(req.body);
+    res.status(201).json(newBarber);
+  } catch (error) {
+    console.error('Error creating barber:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
+};
+
+export const updateBarberController = async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  try {
+    const updatedBarber = await updateBarber(Number(id), req.body);
+    if (!updatedBarber) {
+      res.status(404).json({ message: 'Barbero no encontrado' });
+      return;
+    }
+    res.status(200).json(updatedBarber);
+  } catch (error) {
+    console.error('Error updating barber:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
+};
+
+export const deleteBarberController = async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  try {
+    const result = await deleteBarber(Number(id));
+    if ('error' in result) {
+        res.status(400).json(result);
+    } else {
+        res.status(204).send();
+    }
+  } catch (error) {
+    console.error('Error deleting barber:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
+};
+
+export const getBarberAvailabilityController = async (req: Request, res: Response): Promise<void> => {
+    const { barberId, date } = req.query;
+    if (!barberId || !date) {
+        res.status(400).json({ message: 'Los parámetros barberId y date son requeridos.' });
+        return;
+    }
+    try {
+        const availability = await getBarberAvailability(Number(barberId), date as string);
+        res.json(availability);
+    } catch (error) {
+        console.error('Error getting barber availability:', error);
+        res.status(500).json({ message: 'Error interno del servidor' });
+    }
+};

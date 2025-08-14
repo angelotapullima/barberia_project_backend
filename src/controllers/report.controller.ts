@@ -1,202 +1,103 @@
 import { Request, Response } from 'express';
-import { reportService } from '../services/report.service';
+import {
+  getComprehensiveSales,
+  getServicesProductsSales,
+  getBarberPayments,
+  getDetailedBarberServiceSales,
+  getStationUsage,
+  getCustomerFrequency,
+  getPeakHours,
+} from '../services/report.service';
 
-class ReportController {
-  async getReport(req: Request, res: Response): Promise<void> {
-    const { year, month } = req.query;
-
-    if (!year || !month) {
-      res.status(400).json({ error: 'Year and month are required' });
-      return;
-    }
-
-    try {
-      const reportData = await reportService.generateReport(
-        Number(year),
-        Number(month),
-      );
-      res.json(reportData);
-    } catch (error) {
-      console.error('Error generating report:', error);
-      res.status(500).json({ error: 'Failed to generate report.' });
-    }
-  }
-
-  async getComprehensiveSalesReport(
-    req: Request,
-    res: Response,
-  ): Promise<void> {
-    const filters = req.query; // Filters will be passed as query parameters
-
-    try {
-      const salesData = await reportService.getComprehensiveSales({
-        paymentMethod: filters.paymentMethod
-          ? String(filters.paymentMethod)
-          : undefined,
-        startDate: filters.startDate ? String(filters.startDate) : undefined,
-        endDate: filters.endDate ? String(filters.endDate) : undefined,
-      });
-      res.json(salesData);
-    } catch (error) {
-      console.error('Error fetching comprehensive sales report:', error);
-      res
-        .status(500)
-        .json({ error: 'Failed to fetch comprehensive sales report.' });
-    }
-  }
-
-  async getServicesProductsSalesReport(
-    req: Request,
-    res: Response,
-  ): Promise<void> {
-    const { startDate, endDate, compareStartDate, compareEndDate } = req.query;
-
-    if (!startDate || !endDate) {
-      res
-        .status(400)
-        .json({
-          error: 'Start date and end date are required for the current period.',
-        });
-      return;
-    }
-
-    // Validar fechas de comparación solo si están presentes
-    if (
-      (compareStartDate && !compareEndDate) ||
-      (!compareStartDate && compareEndDate)
-    ) {
-      res
-        .status(400)
-        .json({
-          error:
-            'Both compareStartDate and compareEndDate are required if comparison is enabled.',
-        });
-      return;
-    }
-
-    try {
-      const salesData = await reportService.getServicesProductsSales(
-        String(startDate),
-        String(endDate),
-      );
-
-      let comparisonData;
-      if (compareStartDate && compareEndDate) {
-        comparisonData = await reportService.getServicesProductsSales(
-          String(compareStartDate),
-          String(compareEndDate),
-        );
-      }
-
-      res.json({
-        currentPeriod: salesData,
-        comparisonPeriod: comparisonData,
-      });
-    } catch (error) {
-      console.error('Error fetching services/products sales report:', error);
-      res
-        .status(500)
-        .json({ error: 'Failed to fetch services/products sales report.' });
-    }
-  }
-
-  // Nuevos métodos para los reportes específicos
-  async getStationUsageReport(req: Request, res: Response): Promise<void> {
-    const { startDate, endDate } = req.query;
-    if (!startDate || !endDate) {
-      res.status(400).json({ error: 'Start date and end date are required' });
-      return;
-    }
-    try {
-      const data = await reportService.getStationUsage(
-        String(startDate),
-        String(endDate),
-      );
-      res.json(data);
-    } catch (error) {
-      console.error('Error fetching station usage report:', error);
-      res.status(500).json({ error: 'Failed to fetch station usage report.' });
-    }
-  }
-
-  async getCustomerFrequencyReport(req: Request, res: Response): Promise<void> {
-    const { startDate, endDate } = req.query;
-    if (!startDate || !endDate) {
-      res.status(400).json({ error: 'Start date and end date are required' });
-      return;
-    }
-    try {
-      const data = await reportService.getCustomerFrequency(
-        String(startDate),
-        String(endDate),
-      );
-      res.json(data);
-    } catch (error) {
-      console.error('Error fetching customer frequency report:', error);
-      res
-        .status(500)
-        .json({ error: 'Failed to fetch customer frequency report.' });
-    }
-  }
-
-  async getPeakHoursReport(req: Request, res: Response): Promise<void> {
-    const { startDate, endDate } = req.query;
-    if (!startDate || !endDate) {
-      res.status(400).json({ error: 'Start date and end date are required' });
-      return;
-    }
-    try {
-      const data = await reportService.getPeakHours(
-        String(startDate),
-        String(endDate),
-      );
-      res.json(data);
-    } catch (error) {
-      console.error('Error fetching peak hours report:', error);
-      res.status(500).json({ error: 'Failed to fetch peak hours report.' });
-    }
-  }
-
-  public async getBarberPaymentsReport(req: Request, res: Response): Promise<void> {
-    try {
-      const { startDate, endDate } = req.query;
-      if (!startDate || !endDate) {
-        res.status(400).json({ error: 'Start date and end date are required.' });
-        return;
-      }
-      const payments = await reportService.getBarberPayments(
-        startDate as string,
-        endDate as string
-      );
-      res.json(payments);
-    } catch (error) {
-      console.error('Error getting barber payments report:', error);
-      res.status(500).json({ error: 'Failed to fetch barber payments report.' });
-    }
-  }
-
-  public async getDetailedBarberServiceSales(req: Request, res: Response): Promise<void> {
-    try {
-      const { barberId, startDate, endDate } = req.query;
-      const filters: { barberId?: number; startDate?: string; endDate?: string } = {};
-
-      if (barberId) {
-        filters.barberId = Number(barberId);
-      }
-      if (startDate) {
-        filters.startDate = startDate as string;
-      }
-      if (endDate) {
-        filters.endDate = endDate as string;
-      }
-
-      const sales = await reportService.getDetailedBarberServiceSales(filters);
-      res.json(sales);
-    } catch (error) {
-      console.error('Error getting detailed barber service sales:', error);
-      res.status(500).json({ error: 'Failed to fetch detailed barber service sales.' });
-    }
-  }
+const handleReportError = (res: Response, error: any, message: string) => {
+    console.error(message, error);
+    res.status(500).json({ message });
 }
 
-export const reportController = new ReportController();
+export const getComprehensiveSalesReportController = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const salesData = await getComprehensiveSales(req.query);
+    res.json(salesData);
+  } catch (error) {
+    handleReportError(res, error, 'Error al obtener el reporte de ventas comprensivo.');
+  }
+};
+
+export const getServicesProductsSalesReportController = async (req: Request, res: Response): Promise<void> => {
+  const { startDate, endDate } = req.query;
+  if (!startDate || !endDate) {
+    res.status(400).json({ message: 'Fechas de inicio y fin son requeridas.' });
+    return;
+  }
+  try {
+    const salesData = await getServicesProductsSales(String(startDate), String(endDate));
+    res.json(salesData);
+  } catch (error) {
+    handleReportError(res, error, 'Error al obtener el reporte de ventas por tipo.');
+  }
+};
+
+export const getStationUsageReportController = async (req: Request, res: Response): Promise<void> => {
+  const { startDate, endDate } = req.query;
+  if (!startDate || !endDate) {
+    res.status(400).json({ message: 'Fechas de inicio y fin son requeridas.' });
+    return;
+  }
+  try {
+    const data = await getStationUsage(String(startDate), String(endDate));
+    res.json(data);
+  } catch (error) {
+    handleReportError(res, error, 'Error al obtener el reporte de uso de estaciones.');
+  }
+};
+
+export const getCustomerFrequencyReportController = async (req: Request, res: Response): Promise<void> => {
+  const { startDate, endDate } = req.query;
+  if (!startDate || !endDate) {
+    res.status(400).json({ message: 'Fechas de inicio y fin son requeridas.' });
+    return;
+  }
+  try {
+    const data = await getCustomerFrequency(String(startDate), String(endDate));
+    res.json(data);
+  } catch (error) {
+    handleReportError(res, error, 'Error al obtener el reporte de frecuencia de clientes.');
+  }
+};
+
+export const getPeakHoursReportController = async (req: Request, res: Response): Promise<void> => {
+  const { startDate, endDate } = req.query;
+  if (!startDate || !endDate) {
+    res.status(400).json({ message: 'Fechas de inicio y fin son requeridas.' });
+    return;
+  }
+  try {
+    const data = await getPeakHours(String(startDate), String(endDate));
+    res.json(data);
+  } catch (error) {
+    handleReportError(res, error, 'Error al obtener el reporte de horas pico.');
+  }
+};
+
+export const getBarberPaymentsReportController = async (req: Request, res: Response): Promise<void> => {
+  const { startDate, endDate } = req.query;
+  if (!startDate || !endDate) {
+    res.status(400).json({ message: 'Fechas de inicio y fin son requeridas.' });
+    return;
+  }
+  try {
+    const payments = await getBarberPayments(startDate as string, endDate as string);
+    res.json(payments);
+  } catch (error) {
+    handleReportError(res, error, 'Error al obtener el reporte de pago a barberos.');
+  }
+};
+
+export const getDetailedBarberServiceSalesReportController = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const sales = await getDetailedBarberServiceSales(req.query);
+    res.json(sales);
+  } catch (error) {
+    handleReportError(res, error, 'Error al obtener el reporte detallado de servicios por barbero.');
+  }
+};
