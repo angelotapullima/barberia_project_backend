@@ -1,28 +1,52 @@
-import { Database } from 'sqlite';
-import { setupTestDB } from '../database';
-import { BarberService } from './barber.service';
+import * as barberService from './barber.service';
+
+// Mock the database module to control its behavior in tests
+jest.mock('../database', () => {
+  const mockPoolQuery = jest.fn(); // Declare and initialize mockPoolQuery here
+  return {
+    __esModule: true,
+    default: jest.fn(() => ({
+      query: mockPoolQuery,
+    })),
+    setupTestDB: jest.fn(() => ({
+      query: mockPoolQuery,
+    })),
+    // Expose mockPoolQuery for direct access in tests
+    _getMockPoolQuery: () => mockPoolQuery,
+  };
+});
+
+// Get the mockPoolQuery from the mocked database module
+const { _getMockPoolQuery } = require('../database');
+
 
 describe('BarberService', () => {
-  let db: Database;
-  let barberService: BarberService;
+  let mockPoolQuery: jest.Mock; // Declare it here to use in beforeEach and tests
 
-  beforeEach(async () => {
-    db = await setupTestDB(); // Obtener una nueva DB limpia para cada test
-    barberService = new BarberService(db);
-    jest.spyOn(console, 'error').mockImplementation(() => {}); // Suppress console.error
-    jest.spyOn(console, 'log').mockImplementation(() => {}); // Suppress console.log
+  beforeEach(() => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    mockPoolQuery = _getMockPoolQuery(); // Get the fresh mock for each test
+    mockPoolQuery.mockClear(); // Clear mocks before each test
   });
 
-  afterEach(async () => {
-    await db.close();
-    jest.restoreAllMocks(); // Restore console.error
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it('debería obtener todos los barberos', async () => {
+    const mockBarbersData = [
+      { id: 1, name: 'Carlos Ruiz', email: 'carlos.ruiz@example.com', phone: '555-5678', specialty: 'Cortes clásicos', station_id: 1, base_salary: 1500 },
+      { id: 2, name: 'Luis Fernandez', email: 'luis.fernandez@example.com', phone: '555-8765', specialty: 'Estilos modernos', station_id: 2, base_salary: 1400 },
+    ];
+    mockPoolQuery.mockResolvedValue({ rows: mockBarbersData });
+
     const barbers = await barberService.getAllBarbers();
+
+    expect(mockPoolQuery).toHaveBeenCalledWith('SELECT * FROM barbers ORDER BY id ASC');
     expect(Array.isArray(barbers)).toBe(true);
-    expect(barbers.length).toBeGreaterThan(0);
-    expect(barbers[0].name).toBe('Juan Pérez');
+    expect(barbers.length).toBe(2);
+    expect(barbers[0].name).toBe('Carlos Ruiz');
   });
 
   it('debería crear un nuevo barbero', async () => {
@@ -31,52 +55,88 @@ describe('BarberService', () => {
       email: 'nuevo.barbero@example.com',
       station_id: 1,
       base_salary: 1500,
-    }; // Added email and station_id
-    const createdBarber = await barberService.createBarber(newBarber);
-    expect(createdBarber).toHaveProperty('id');
-    expect(createdBarber.name).toBe('Nuevo Barbero');
+    };
+    const createdBarberId = 4;
 
-    const allBarbers = await barberService.getAllBarbers();
-    expect(allBarbers.length).toBe(4); // 3 iniciales + 1 nuevo
+    // Mock for createBarber (INSERT)
+    mockPoolQuery.mockResolvedValueOnce({
+      rows: [{ id: createdBarberId }], // Simulate the ID returned after insertion
+    });
+
+    const createdBarber = await barberService.createBarber(newBarber);
+
+    expect(mockPoolQuery).toHaveBeenCalledWith(
+      'INSERT INTO barbers (name, email, phone, specialty, photo_url, station_id, base_salary) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+      [newBarber.name, newBarber.email, undefined, undefined, undefined, newBarber.station_id, newBarber.base_salary]
+    );
+    expect(createdBarber).toHaveProperty('id', createdBarberId);
+    expect(createdBarber.name).toBe('Nuevo Barbero');
   });
 
   it('debería actualizar un barbero existente', async () => {
-    const updatedBarber = await barberService.updateBarber(1, {
+    const barberId = 1;
+    const updateData = {
       name: 'Juan Actualizado',
       email: 'juan.actualizado@example.com',
       station_id: 1,
       base_salary: 1400,
-    }); // Added email and station_id
+    };
+
+    // Mock for updateBarber (UPDATE)
+    mockPoolQuery.mockResolvedValueOnce({ rowCount: 1 }); // Simulate 1 row affected
+
+    const updatedBarber = await barberService.updateBarber(barberId, updateData);
+
+    expect(mockPoolQuery).toHaveBeenCalledWith(
+      'UPDATE barbers SET name = $1, email = $2, phone = $3, specialty = $4, photo_url = $5, station_id = $6, base_salary = $7, updated_at = NOW() WHERE id = $8',
+      [updateData.name, updateData.email, undefined, undefined, undefined, updateData.station_id, updateData.base_salary, barberId]
+    );
     expect(updatedBarber).not.toBeNull();
     expect(updatedBarber?.name).toBe('Juan Actualizado');
-
-    const barber = (await barberService.getAllBarbers()).find(
-      (b) => b.id === 1,
-    );
-    expect(barber?.name).toBe('Juan Actualizado');
   });
 
   it('debería eliminar un barbero', async () => {
-    const isDeleted = await barberService.deleteBarber(1);
-    expect(isDeleted).toBe(true);
+    const barberIdToDelete = 1;
 
-    const allBarbers = await barberService.getAllBarbers();
-    expect(allBarbers.length).toBe(2); // 3 iniciales - 1 eliminado
-    expect(allBarbers.some((b) => b.id === 1)).toBe(false);
+    // Mock for deleteBarber (DELETE)
+    mockPoolQuery.mockResolvedValueOnce({ rowCount: 1 }); // Simulate 1 row affected
+
+    const result = await barberService.deleteBarber(barberIdToDelete);
+
+    expect(mockPoolQuery).toHaveBeenCalledWith('DELETE FROM barbers WHERE id = $1', [barberIdToDelete]);
+    expect(result).toEqual({ message: 'Barber deleted successfully' });
   });
 
   it('no debería actualizar un barbero que no existe', async () => {
-    const updatedBarber = await barberService.updateBarber(999, {
+    const nonExistentBarberId = 999;
+    const updateData = {
       name: 'No Existe',
       email: 'no.existe@example.com',
       station_id: 1,
       base_salary: 1000,
-    }); // Added email and station_id
+    };
+
+    // Mock for updateBarber (UPDATE) when no row is affected
+    mockPoolQuery.mockResolvedValueOnce({ rowCount: 0 }); // Simulate 0 rows affected
+
+    const updatedBarber = await barberService.updateBarber(nonExistentBarberId, updateData);
+
+    expect(mockPoolQuery).toHaveBeenCalledWith(
+      'UPDATE barbers SET name = $1, email = $2, phone = $3, specialty = $4, photo_url = $5, station_id = $6, base_salary = $7, updated_at = NOW() WHERE id = $8',
+      [updateData.name, updateData.email, undefined, undefined, undefined, updateData.station_id, updateData.base_salary, nonExistentBarberId]
+    );
     expect(updatedBarber).toBeNull();
   });
 
   it('no debería eliminar un barbero que no existe', async () => {
-    const isDeleted = await barberService.deleteBarber(999);
-    expect(isDeleted).toBe(false);
+    const nonExistentBarberId = 999;
+
+    // Mock for deleteBarber (DELETE) when no row is affected
+    mockPoolQuery.mockResolvedValueOnce({ rowCount: 0 }); // Simulate 0 rows affected
+
+    const result = await barberService.deleteBarber(nonExistentBarberId);
+
+    expect(mockPoolQuery).toHaveBeenCalledWith('DELETE FROM barbers WHERE id = $1', [nonExistentBarberId]);
+    expect(result).toEqual({ message: 'Barber not found' });
   });
 });

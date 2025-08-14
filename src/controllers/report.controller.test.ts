@@ -1,17 +1,26 @@
 import { Request, Response } from 'express';
-import { reportController } from './report.controller'; // Importar la instancia
-import { reportService } from '../services/report.service';
+import {
+  getComprehensiveSalesReportController,
+  getServicesProductsSalesReportController,
+  getStationUsageReportController,
+  getCustomerFrequencyReportController,
+  getPeakHoursReportController,
+  getBarberPaymentsReportController,
+  getDetailedBarberServiceSalesReportController,
+  generateReportController, // Newly added controller function
+} from './report.controller';
+import * as reportService from '../services/report.service'; // Import all functions from service
 
-// Mock del servicio de reportes
+// Mock all functions from report.service
 jest.mock('../services/report.service', () => ({
-  reportService: {
-    generateReport: jest.fn(),
-    getComprehensiveSales: jest.fn(),
-    getServicesProductsSales: jest.fn(),
-    getStationUsage: jest.fn(),
-    getCustomerFrequency: jest.fn(),
-    getPeakHours: jest.fn(),
-  },
+  generateReport: jest.fn(),
+  getComprehensiveSales: jest.fn(),
+  getServicesProductsSales: jest.fn(),
+  getStationUsage: jest.fn(),
+  getCustomerFrequency: jest.fn(),
+  getPeakHours: jest.fn(),
+  getBarberPayments: jest.fn(),
+  getDetailedBarberServiceSales: jest.fn(),
 }));
 
 describe('ReportController', () => {
@@ -20,148 +29,287 @@ describe('ReportController', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.spyOn(console, 'error').mockImplementation(() => {}); // Suppress console.error
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    jest.spyOn(console, 'log').mockImplementation(() => {});
 
     mockRequest = {};
     mockResponse = {
       json: jest.fn(),
       status: jest.fn().mockReturnThis(),
-      send: jest.fn(), // Añadido para manejar res.send()
+      send: jest.fn(),
     };
   });
 
   afterEach(() => {
-    jest.restoreAllMocks(); // Restore console.error
+    jest.restoreAllMocks();
   });
 
-  it('debería generar un reporte general', async () => {
-    const reportData = { events: [], stats: [] };
-    (reportService.generateReport as jest.Mock).mockResolvedValue(reportData);
+  describe('generateReportController', () => {
+    it('debería generar un reporte general', async () => {
+      const reportData = { events: [], stats: [] };
+      (reportService.generateReport as jest.Mock).mockResolvedValue(reportData);
 
-    mockRequest.query = { year: '2025', month: '8' };
+      mockRequest.query = { year: '2025', month: '8' };
 
-    await reportController.getReport(
-      mockRequest as Request,
-      mockResponse as Response,
-    );
+      await generateReportController(mockRequest as Request, mockResponse as Response);
 
-    expect(reportService.generateReport).toHaveBeenCalledWith(2025, 8);
-    expect(mockResponse.json).toHaveBeenCalledWith(reportData);
-  });
-
-  it('debería obtener el reporte de ventas completo', async () => {
-    const salesData = [{ id: 1, total: 100 }];
-    (reportService.getComprehensiveSales as jest.Mock).mockResolvedValue(
-      salesData,
-    );
-
-    mockRequest.query = { startDate: '2025-01-01', endDate: '2025-01-31' };
-
-    await reportController.getComprehensiveSalesReport(
-      mockRequest as Request,
-      mockResponse as Response,
-    );
-
-    expect(reportService.getComprehensiveSales).toHaveBeenCalledWith({
-      startDate: '2025-01-01',
-      endDate: '2025-01-31',
+      expect(reportService.generateReport).toHaveBeenCalledWith(2025, 8);
+      expect(mockResponse.json).toHaveBeenCalledWith(reportData);
+      expect(mockResponse.status).not.toHaveBeenCalledWith(500);
     });
-    expect(mockResponse.json).toHaveBeenCalledWith(salesData);
-  });
 
-  it('debería obtener el reporte de ventas por servicios/productos', async () => {
-    const salesData = [{ type: 'service', total: 50 }];
-    (reportService.getServicesProductsSales as jest.Mock).mockResolvedValue(
-      salesData,
-    );
+    it('debería manejar parámetros faltantes al generar reporte general', async () => {
+      mockRequest.query = { year: '2025' }; // Missing month
 
-    mockRequest.query = { startDate: '2025-01-01', endDate: '2025-01-31' };
+      await generateReportController(mockRequest as Request, mockResponse as Response);
 
-    await reportController.getServicesProductsSalesReport(
-      mockRequest as Request,
-      mockResponse as Response,
-    );
+      expect(mockResponse.status).toHaveBeenCalledWith(400);
+      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Los parámetros year y month son requeridos.' });
+    });
 
-    expect(reportService.getServicesProductsSales).toHaveBeenCalledWith(
-      '2025-01-01',
-      '2025-01-31',
-    );
-    expect(mockResponse.json).toHaveBeenCalledWith({
-      currentPeriod: salesData,
-      comparisonPeriod: undefined, // Since compareStartDate and compareEndDate are not provided in the test
+    it('debería manejar errores al generar un reporte general', async () => {
+      (reportService.generateReport as jest.Mock).mockRejectedValue(new Error('Error de DB'));
+
+      mockRequest.query = { year: '2025', month: '8' };
+
+      await generateReportController(mockRequest as Request, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(500);
+      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Error al generar el reporte.' });
     });
   });
 
-  it('debería obtener el reporte de utilización de estaciones', async () => {
-    const data = [{ station_name: 'Estación 1', usage_count: 5 }];
-    (reportService.getStationUsage as jest.Mock).mockResolvedValue(data);
+  describe('getComprehensiveSalesReportController', () => {
+    it('debería obtener el reporte de ventas completo', async () => {
+      const salesData = [{ id: 1, total: 100 }];
+      (reportService.getComprehensiveSales as jest.Mock).mockResolvedValue(salesData);
 
-    mockRequest.query = { startDate: '2025-01-01', endDate: '2025-01-31' };
+      mockRequest.query = { startDate: '2025-01-01', endDate: '2025-01-31' };
 
-    await reportController.getStationUsageReport(
-      mockRequest as Request,
-      mockResponse as Response,
-    );
+      await getComprehensiveSalesReportController(mockRequest as Request, mockResponse as Response);
 
-    expect(reportService.getStationUsage).toHaveBeenCalledWith(
-      '2025-01-01',
-      '2025-01-31',
-    );
-    expect(mockResponse.json).toHaveBeenCalledWith(data);
+      expect(reportService.getComprehensiveSales).toHaveBeenCalledWith({
+        startDate: '2025-01-01',
+        endDate: '2025-01-31',
+      });
+      expect(mockResponse.json).toHaveBeenCalledWith(salesData);
+      expect(mockResponse.status).not.toHaveBeenCalledWith(500);
+    });
+
+    it('debería manejar errores al obtener el reporte de ventas completo', async () => {
+      (reportService.getComprehensiveSales as jest.Mock).mockRejectedValue(new Error('Error de DB'));
+
+      mockRequest.query = { startDate: '2025-01-01', endDate: '2025-01-31' };
+
+      await getComprehensiveSalesReportController(mockRequest as Request, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(500);
+      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Error al obtener el reporte de ventas comprensivo.' });
+    });
   });
 
-  it('debería obtener el reporte de frecuencia de clientes', async () => {
-    const data = [{ customer_name: 'Cliente A', visit_count: 3 }];
-    (reportService.getCustomerFrequency as jest.Mock).mockResolvedValue(data);
+  describe('getServicesProductsSalesReportController', () => {
+    it('debería obtener el reporte de ventas por servicios/productos', async () => {
+      const salesData = [{ type: 'service', total: 50 }];
+      (reportService.getServicesProductsSales as jest.Mock).mockResolvedValue(salesData);
 
-    mockRequest.query = { startDate: '2025-01-01', endDate: '2025-01-31' };
+      mockRequest.query = { startDate: '2025-01-01', endDate: '2025-01-31' };
 
-    await reportController.getCustomerFrequencyReport(
-      mockRequest as Request,
-      mockResponse as Response,
-    );
+      await getServicesProductsSalesReportController(mockRequest as Request, mockResponse as Response);
 
-    expect(reportService.getCustomerFrequency).toHaveBeenCalledWith(
-      '2025-01-01',
-      '2025-01-31',
-    );
-    expect(mockResponse.json).toHaveBeenCalledWith(data);
+      expect(reportService.getServicesProductsSales).toHaveBeenCalledWith('2025-01-01', '2025-01-31');
+      expect(mockResponse.json).toHaveBeenCalledWith(salesData); // Expecting salesData directly
+      expect(mockResponse.status).not.toHaveBeenCalledWith(500);
+    });
+
+    it('debería manejar parámetros faltantes al obtener el reporte de ventas por servicios/productos', async () => {
+      mockRequest.query = { startDate: '2025-01-01' }; // Missing endDate
+
+      await getServicesProductsSalesReportController(mockRequest as Request, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(400);
+      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Fechas de inicio y fin son requeridas.' });
+    });
+
+    it('debería manejar errores al obtener el reporte de ventas por servicios/productos', async () => {
+      (reportService.getServicesProductsSales as jest.Mock).mockRejectedValue(new Error('Error de DB'));
+
+      mockRequest.query = { startDate: '2025-01-01', endDate: '2025-01-31' };
+
+      await getServicesProductsSalesReportController(mockRequest as Request, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(500);
+      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Error al obtener el reporte de ventas por tipo.' });
+    });
   });
 
-  it('debería obtener el reporte de horas pico', async () => {
-    const data = [{ hour: '10:00', reservation_count: 7 }];
-    (reportService.getPeakHours as jest.Mock).mockResolvedValue(data);
+  describe('getStationUsageReportController', () => {
+    it('debería obtener el reporte de utilización de estaciones', async () => {
+      const data = [{ station_name: 'Estación 1', usage_count: 5 }];
+      (reportService.getStationUsage as jest.Mock).mockResolvedValue(data);
 
-    mockRequest.query = { startDate: '2025-01-01', endDate: '2025-01-31' };
+      mockRequest.query = { startDate: '2025-01-01', endDate: '2025-01-31' };
 
-    await reportController.getPeakHoursReport(
-      mockRequest as Request,
-      mockResponse as Response,
-    );
+      await getStationUsageReportController(mockRequest as Request, mockResponse as Response);
 
-    expect(reportService.getPeakHours).toHaveBeenCalledWith(
-      '2025-01-01',
-      '2025-01-31',
-    );
-    expect(mockResponse.json).toHaveBeenCalledWith(data);
+      expect(reportService.getStationUsage).toHaveBeenCalledWith('2025-01-01', '2025-01-31');
+      expect(mockResponse.json).toHaveBeenCalledWith(data);
+      expect(mockResponse.status).not.toHaveBeenCalledWith(500);
+    });
+
+    it('debería manejar parámetros faltantes al obtener el reporte de utilización de estaciones', async () => {
+      mockRequest.query = { startDate: '2025-01-01' }; // Missing endDate
+
+      await getStationUsageReportController(mockRequest as Request, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(400);
+      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Fechas de inicio y fin son requeridas.' });
+    });
+
+    it('debería manejar errores al obtener el reporte de utilización de estaciones', async () => {
+      (reportService.getStationUsage as jest.Mock).mockRejectedValue(new Error('Error de DB'));
+
+      mockRequest.query = { startDate: '2025-01-01', endDate: '2025-01-31' };
+
+      await getStationUsageReportController(mockRequest as Request, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(500);
+      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Error al obtener el reporte de uso de estaciones.' });
+    });
   });
 
-  // Manejo de errores (ejemplo para un método)
-  it('debería manejar errores al generar un reporte general', async () => {
-    (reportService.generateReport as jest.Mock).mockRejectedValue(
-      new Error('Error de DB'),
-    );
+  describe('getCustomerFrequencyReportController', () => {
+    it('debería obtener el reporte de frecuencia de clientes', async () => {
+      const data = [{ customer_name: 'Cliente A', visit_count: 3 }];
+      (reportService.getCustomerFrequency as jest.Mock).mockResolvedValue(data);
 
-    mockRequest.query = { year: '2025', month: '8' };
+      mockRequest.query = { startDate: '2025-01-01', endDate: '2025-01-31' };
 
-    await reportController.getReport(
-      mockRequest as Request,
-      mockResponse as Response,
-    );
+      await getCustomerFrequencyReportController(mockRequest as Request, mockResponse as Response);
 
-    expect(mockResponse.status).toHaveBeenCalledWith(500);
-    expect(mockResponse.json).toHaveBeenCalledWith({
-      error: 'Failed to generate report.',
+      expect(reportService.getCustomerFrequency).toHaveBeenCalledWith('2025-01-01', '2025-01-31');
+      expect(mockResponse.json).toHaveBeenCalledWith(data);
+      expect(mockResponse.status).not.toHaveBeenCalledWith(500);
+    });
+
+    it('debería manejar parámetros faltantes al obtener el reporte de frecuencia de clientes', async () => {
+      mockRequest.query = { startDate: '2025-01-01' }; // Missing endDate
+
+      await getCustomerFrequencyReportController(mockRequest as Request, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(400);
+      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Fechas de inicio y fin son requeridas.' });
+    });
+
+    it('debería manejar errores al obtener el reporte de frecuencia de clientes', async () => {
+      (reportService.getCustomerFrequency as jest.Mock).mockRejectedValue(new Error('Error de DB'));
+
+      mockRequest.query = { startDate: '2025-01-01', endDate: '2025-01-31' };
+
+      await getCustomerFrequencyReportController(mockRequest as Request, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(500);
+      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Error al obtener el reporte de frecuencia de clientes.' });
+    });
+  });
+
+  describe('getPeakHoursReportController', () => {
+    it('debería obtener el reporte de horas pico', async () => {
+      const data = [{ hour: '10:00', reservation_count: 7 }];
+      (reportService.getPeakHours as jest.Mock).mockResolvedValue(data);
+
+      mockRequest.query = { startDate: '2025-01-01', endDate: '2025-01-31' };
+
+      await getPeakHoursReportController(mockRequest as Request, mockResponse as Response);
+
+      expect(reportService.getPeakHours).toHaveBeenCalledWith('2025-01-01', '2025-01-31');
+      expect(mockResponse.json).toHaveBeenCalledWith(data);
+      expect(mockResponse.status).not.toHaveBeenCalledWith(500);
+    });
+
+    it('debería manejar parámetros faltantes al obtener el reporte de horas pico', async () => {
+      mockRequest.query = { startDate: '2025-01-01' }; // Missing endDate
+
+      await getPeakHoursReportController(mockRequest as Request, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(400);
+      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Fechas de inicio y fin son requeridas.' });
+    });
+
+    it('debería manejar errores al obtener el reporte de horas pico', async () => {
+      (reportService.getPeakHours as jest.Mock).mockRejectedValue(new Error('Error de DB'));
+
+      mockRequest.query = { startDate: '2025-01-01', endDate: '2025-01-31' };
+
+      await getPeakHoursReportController(mockRequest as Request, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(500);
+      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Error al obtener el reporte de horas pico.' });
+    });
+  });
+
+  describe('getBarberPaymentsReportController', () => {
+    it('debería obtener el reporte de pagos a barberos', async () => {
+      const paymentsData = [{ barber_id: 1, barber_name: 'Barbero A', payment: 1500 }];
+      (reportService.getBarberPayments as jest.Mock).mockResolvedValue(paymentsData);
+
+      mockRequest.query = { startDate: '2025-01-01', endDate: '2025-01-31' };
+
+      await getBarberPaymentsReportController(mockRequest as Request, mockResponse as Response);
+
+      expect(reportService.getBarberPayments).toHaveBeenCalledWith('2025-01-01', '2025-01-31');
+      expect(mockResponse.json).toHaveBeenCalledWith(paymentsData);
+      expect(mockResponse.status).not.toHaveBeenCalledWith(500);
+    });
+
+    it('debería manejar parámetros faltantes al obtener el reporte de pagos a barberos', async () => {
+      mockRequest.query = { startDate: '2025-01-01' }; // Missing endDate
+
+      await getBarberPaymentsReportController(mockRequest as Request, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(400);
+      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Fechas de inicio y fin son requeridas.' });
+    });
+
+    it('debería manejar errores al obtener el reporte de pagos a barberos', async () => {
+      (reportService.getBarberPayments as jest.Mock).mockRejectedValue(new Error('Error de DB'));
+
+      mockRequest.query = { startDate: '2025-01-01', endDate: '2025-01-31' };
+
+      await getBarberPaymentsReportController(mockRequest as Request, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(500);
+      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Error al obtener el reporte de pago a barberos.' });
+    });
+  });
+
+  describe('getDetailedBarberServiceSalesReportController', () => {
+    it('debería obtener el reporte detallado de servicios por barbero', async () => {
+      const salesData = [{ barber_name: 'Barbero A', service_name: 'Corte' }];
+      (reportService.getDetailedBarberServiceSales as jest.Mock).mockResolvedValue(salesData);
+
+      mockRequest.query = { barberId: '1', startDate: '2025-01-01', endDate: '2025-01-31' };
+
+      await getDetailedBarberServiceSalesReportController(mockRequest as Request, mockResponse as Response);
+
+      expect(reportService.getDetailedBarberServiceSales).toHaveBeenCalledWith({
+        barberId: '1',
+        startDate: '2025-01-01',
+        endDate: '2025-01-31',
+      });
+      expect(mockResponse.json).toHaveBeenCalledWith(salesData);
+      expect(mockResponse.status).not.toHaveBeenCalledWith(500);
+    });
+
+    it('debería manejar errores al obtener el reporte detallado de servicios por barbero', async () => {
+      (reportService.getDetailedBarberServiceSales as jest.Mock).mockRejectedValue(new Error('Error de DB'));
+
+      mockRequest.query = { barberId: '1', startDate: '2025-01-01', endDate: '2025-01-31' };
+
+      await getDetailedBarberServiceSalesReportController(mockRequest as Request, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(500);
+      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Error al obtener el reporte detallado de servicios por barbero.' });
     });
   });
 });

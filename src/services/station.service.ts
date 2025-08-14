@@ -2,7 +2,7 @@ import setup from '../database';
 
 const pool = setup();
 
-interface Station {
+export interface Station { // Added export keyword
   id?: number;
   name: string;
   description?: string;
