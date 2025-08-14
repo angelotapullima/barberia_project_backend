@@ -23,9 +23,11 @@ app.get('/', (req, res) => {
 });
 
 // Initialize database and then set up routes
-setupDatabase()
-  .then(() => {
-    console.log('Database initialized.');
+const pool = setupDatabase();
+pool.connect()
+  .then(client => {
+    console.log('Database connected.');
+    client.release();
     app.use('/api/barbers', barberRoutes);
     app.use('/api/stations', stationRoutes);
     app.use('/api/services', serviceRoutes);
@@ -37,7 +39,7 @@ setupDatabase()
     app.use('/api/draft-sales', draftSaleRoutes); // New: Use draft sale routes
   })
   .catch((err: any) => {
-    console.error('Failed to initialize database:', err);
+    console.error('Failed to connect to the database:', err);
     process.exit(1);
   });
 

@@ -124,7 +124,7 @@ export const getAllReservations = async (
   return Array.from(reservationsMap.values());
 };
 
-export const getReservationById = async (id: number): Promise<Reservation | undefined> => {
+export const getReservationById = async (id: number): Promise<Reservation | null> => {
   const { rows } = await pool.query(
     `
     SELECT 
@@ -140,7 +140,7 @@ export const getReservationById = async (id: number): Promise<Reservation | unde
   `,
     [id],
   );
-  return rows[0];
+  return rows[0] || null;
 };
 
 export const createReservation = async (reservation: Omit<Reservation, 'id'>): Promise<Reservation> => {

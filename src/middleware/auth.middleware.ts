@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { authService } from '../services/auth.service';
+import { verifyToken } from '../services/auth.service';
 
 // Extender la interfaz Request para incluir la propiedad user
 declare global {
@@ -22,7 +22,7 @@ export const authenticateToken = (
     return res.status(401).json({ message: 'Token no proporcionado.' });
   }
 
-  const decoded = authService.verifyToken(token);
+  const decoded = verifyToken(token);
 
   if (!decoded) {
     return res.status(403).json({ message: 'Token inválido o expirado.' });

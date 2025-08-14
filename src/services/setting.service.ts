@@ -26,7 +26,7 @@ export const setSetting = async (key: string, value: any): Promise<boolean> => {
   `,
     [key, valueAsString],
   );
-  return result.rowCount > 0;
+  return (result.rowCount ?? 0) > 0;
 };
 
 export const getAllSettings = async (): Promise<Record<string, any>> => {
