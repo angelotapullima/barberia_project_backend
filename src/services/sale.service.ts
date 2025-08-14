@@ -60,6 +60,39 @@ export const getSaleById = async (id: number): Promise<Sale | null> => {
     return sale || null;
 }
 
+export const getSalesSummaryByDateRange = async (startDate: string, endDate: string): Promise<any[]> => {
+  const { rows } = await pool.query(
+    `
+    SELECT
+      DATE(sale_date) as date,
+      SUM(total_amount) as total
+    FROM sales
+    WHERE sale_date::date BETWEEN $1 AND $2
+    GROUP BY DATE(sale_date)
+    ORDER BY date ASC;
+    `,
+    [startDate, endDate]
+  );
+  return rows.map(row => ({ ...row, total: Number(row.total) }));
+};
+
+export const getSalesSummaryByService = async (startDate: string, endDate: string): Promise<any[]> => {
+  const { rows } = await pool.query(
+    `
+    SELECT
+      si.item_name as service_name,
+      SUM(si.price_at_sale * si.quantity) as total_sales
+    FROM sale_items si
+    JOIN sales s ON si.sale_id = s.id
+    WHERE si.item_type = 'service' AND s.sale_date::date BETWEEN $1 AND $2
+    GROUP BY si.item_name
+    ORDER BY total_sales DESC;
+    `,
+    [startDate, endDate]
+  );
+  return rows.map(row => ({ ...row, total_sales: Number(row.total_sales) }));
+};
+
 export const createSale = async (sale: Omit<Sale, 'id'>, existingClient?: PoolClient): Promise<Sale> => {
   const {
     sale_date,
