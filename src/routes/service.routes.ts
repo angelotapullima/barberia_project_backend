@@ -1,20 +1,27 @@
 import { Router } from 'express';
-import { serviceController } from '../controllers/service.controller';
+import {
+  getAllServicesController,
+  createServiceController,
+  updateServiceController,
+  deleteServiceController,
+  getProductsController,
+  updateProductStockController,
+  getLowStockProductsController,
+  getInventoryReportSummaryController,
+} from '../controllers/service.controller';
 
 const router = Router();
 
-router.get('/', serviceController.getAllServices);
-router.post('/', serviceController.createService);
-router.put('/:id', serviceController.updateService);
-router.delete('/:id', serviceController.deleteService);
+// Rutas para Servicios y Productos (CRUD general)
+router.get('/', getAllServicesController);
+router.post('/', createServiceController);
+router.put('/:id', updateServiceController);
+router.delete('/:id', deleteServiceController);
 
-// New routes for inventory management
-router.get('/products', serviceController.getProducts);
-router.put('/products/:id/stock', serviceController.updateProductStock);
-router.get('/products/low-stock', serviceController.getLowStockProducts);
-router.get(
-  '/products/report/summary',
-  serviceController.getInventoryReportSummary,
-);
+// Rutas específicas para Productos e Inventario
+router.get('/products', getProductsController);
+router.get('/products/low-stock', getLowStockProductsController);
+router.get('/products/report/summary', getInventoryReportSummaryController);
+router.put('/products/:id/stock', updateProductStockController);
 
 export default router;

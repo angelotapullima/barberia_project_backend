@@ -1,11 +1,16 @@
 import { Router } from 'express';
-import { stationController } from '../controllers/station.controller';
+import {
+  getAllStationsController,
+  createStationController,
+  updateStationController,
+  deleteStationController,
+} from '../controllers/station.controller';
 
 const router = Router();
 
-router.get('/', stationController.getAllStations);
-router.post('/', stationController.createStation);
-router.put('/:id', stationController.updateStation);
-router.delete('/:id', stationController.deleteStation);
+router.get('/', getAllStationsController);
+router.post('/', createStationController);
+router.put('/:id', updateStationController);
+router.delete('/:id', deleteStationController);
 
 export default router;

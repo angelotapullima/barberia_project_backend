@@ -1,170 +1,137 @@
-import setupDatabase from '../database';
-import { Database } from 'sqlite';
+import setup from '../database';
+
+const pool = setup();
 
 interface Service {
   id?: number;
   name: string;
+  description?: string | null;
   price: number;
-  duration_minutes: number; // Added
+  duration_minutes: number;
   type?: string;
   stock_quantity?: number;
   min_stock_level?: number;
 }
 
-export class ServiceService {
-  private db!: Database;
+export const getAllServices = async (): Promise<Service[]> => {
+  const result = await pool.query('SELECT * FROM services ORDER BY type, name');
+  return result.rows;
+};
 
-  constructor(db?: Database) {
-    if (db) {
-      this.db = db;
-    } else {
-      setupDatabase().then((db: Database) => {
-        this.db = db;
-      });
-    }
-  }
+export const createService = async (service: Service): Promise<Service> => {
+  const {
+    name,
+    description,
+    price,
+    duration_minutes,
+    type = 'service',
+    stock_quantity = 0,
+    min_stock_level = 0,
+  } = service;
+  const result = await pool.query(
+    'INSERT INTO services (name, description, price, duration_minutes, type, stock_quantity, min_stock_level) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+    [name, description, price, duration_minutes, type, stock_quantity, min_stock_level],
+  );
+  return result.rows[0];
+};
 
-  async getAllServices(): Promise<Service[]> {
-    const services = await this.db.all('SELECT * FROM services ORDER BY name');
-    return services;
-  }
-
-  async createService(service: Service): Promise<Service> {
-    const {
+export const updateService = async (id: number, service: Service): Promise<Service | null> => {
+  const {
+    name,
+    description,
+    price,
+    duration_minutes,
+    type = 'service',
+    stock_quantity = 0,
+    min_stock_level = 0,
+  } = service;
+  const result = await pool.query(
+    'UPDATE services SET name = $1, description = $2, price = $3, duration_minutes = $4, type = $5, stock_quantity = $6, min_stock_level = $7, updated_at = NOW() WHERE id = $8 RETURNING *',
+    [
       name,
-      price,
-      duration_minutes,
-      type = 'service',
-      stock_quantity = 0,
-      min_stock_level = 0,
-    } = service;
-    const result = await this.db.run(
-      'INSERT INTO services (name, price, duration_minutes, type, stock_quantity, min_stock_level) VALUES (?, ?, ?, ?, ?, ?)',
-      [name, price, duration_minutes, type, stock_quantity, min_stock_level],
-    );
-    return {
-      id: result.lastID,
-      name,
-      price,
-      duration_minutes,
-      type,
-      stock_quantity,
-      min_stock_level,
-    };
-  }
-
-  async updateService(id: number, service: Service): Promise<Service | null> {
-    const {
-      name,
-      price,
-      duration_minutes,
-      type = 'service',
-      stock_quantity = 0,
-      min_stock_level = 0,
-    } = service;
-    const result = await this.db.run(
-      'UPDATE services SET name = ?, price = ?, duration_minutes = ?, type = ?, stock_quantity = ?, min_stock_level = ? WHERE id = ?',
-      [
-        name,
-        price,
-        duration_minutes,
-        type,
-        stock_quantity,
-        min_stock_level,
-        id,
-      ],
-    );
-    if (result.changes === 0) {
-      return null;
-    }
-    return {
-      id,
-      name,
+      description,
       price,
       duration_minutes,
       type,
       stock_quantity,
       min_stock_level,
+      id,
+    ],
+  );
+  if (result.rowCount === 0) {
+    return null;
+  }
+  return result.rows[0];
+};
+
+export const deleteService = async (id: number): Promise<{ message: string } | { error: string }> => {
+  const saleItemResult = await pool.query(
+    'SELECT id FROM sale_items WHERE service_id = $1',
+    [id],
+  );
+  if (saleItemResult.rows.length > 0) {
+    return {
+      error:
+        'No se puede eliminar el servicio porque está asociado a una venta.',
     };
   }
 
-  async deleteService(id: number): Promise<boolean | { error: string }> {
-    const saleItem = await this.db.get(
-      'SELECT id FROM sale_items WHERE service_id = ?',
-      id,
-    );
-    if (saleItem) {
-      return {
-        error:
-          'No se puede eliminar el servicio porque está asociado a una venta.',
-      };
-    }
-
-    const result = await this.db.run('DELETE FROM services WHERE id = ?', id);
-    return result.changes !== undefined && result.changes > 0;
+  const result = await pool.query('DELETE FROM services WHERE id = $1', [id]);
+  
+  if (result.rowCount === 0) {
+      return { error: 'Service not found' };
   }
 
-  async getProducts(): Promise<Service[]> {
-    const products = await this.db.all(
-      'SELECT * FROM services WHERE type = ? ORDER BY name',
-      ['product'],
-    );
-    return products;
+  return { message: 'Service deleted successfully' };
+};
+
+export const getProducts = async (): Promise<Service[]> => {
+  const result = await pool.query(
+    "SELECT * FROM services WHERE type = 'product' ORDER BY name"
+  );
+  return result.rows;
+};
+
+export const updateProductStock = async (
+  id: number,
+  quantity: number,
+): Promise<Service | null> => {
+  const result = await pool.query(
+    "UPDATE services SET stock_quantity = $1, updated_at = NOW() WHERE id = $2 AND type = 'product' RETURNING *",
+    [quantity, id],
+  );
+  if (result.rowCount === 0) {
+    return null;
   }
+  return result.rows[0];
+};
 
-  async updateProductStock(
-    id: number,
-    quantity: number,
-  ): Promise<Service | null> {
-    const result = await this.db.run(
-      'UPDATE services SET stock_quantity = ? WHERE id = ? AND type = ?',
-      [quantity, id, 'product'],
-    );
-    if (result.changes === 0) {
-      return null;
-    }
-    const updatedService = await this.db.get(
-      'SELECT * FROM services WHERE id = ?',
-      id,
-    );
-    return updatedService || null;
-  }
+export const getLowStockProducts = async (): Promise<Service[]> => {
+  const result = await pool.query(
+    "SELECT * FROM services WHERE type = 'product' AND stock_quantity <= min_stock_level ORDER BY name"
+  );
+  return result.rows;
+};
 
-  async getLowStockProducts(): Promise<Service[]> {
-    const lowStockProducts = await this.db.all(
-      'SELECT * FROM services WHERE type = ? AND stock_quantity <= min_stock_level ORDER BY name',
-      ['product'],
-    );
-    return lowStockProducts;
-  }
+export const getInventoryReportSummary = async (): Promise<{
+  totalProducts: number;
+  lowStockCount: number;
+  totalInventoryValue: number;
+}> => {
+  const totalProductsResult = await pool.query(
+    "SELECT COUNT(*) as count FROM services WHERE type = 'product'"
+  );
+  const totalProducts = Number(totalProductsResult.rows[0].count);
 
-  async getInventoryReportSummary(): Promise<{
-    totalProducts: number;
-    lowStockCount: number;
-    totalInventoryValue: number;
-  }> {
-    const totalProductsResult = await this.db.get(
-      'SELECT COUNT(*) as count FROM services WHERE type = ?',
-      ['product'],
-    );
-    const totalProducts = totalProductsResult ? totalProductsResult.count : 0;
+  const lowStockCountResult = await pool.query(
+    "SELECT COUNT(*) as count FROM services WHERE type = 'product' AND stock_quantity <= min_stock_level"
+  );
+  const lowStockCount = Number(lowStockCountResult.rows[0].count);
 
-    const lowStockCountResult = await this.db.get(
-      'SELECT COUNT(*) as count FROM services WHERE type = ? AND stock_quantity <= min_stock_level',
-      ['product'],
-    );
-    const lowStockCount = lowStockCountResult ? lowStockCountResult.count : 0;
+  const totalInventoryValueResult = await pool.query(
+    "SELECT SUM(stock_quantity * price) as value FROM services WHERE type = 'product'"
+  );
+  const totalInventoryValue = Number(totalInventoryValueResult.rows[0].value) || 0;
 
-    const totalInventoryValueResult = await this.db.get(
-      'SELECT SUM(stock_quantity * price) as value FROM services WHERE type = ?',
-      ['product'],
-    );
-    const totalInventoryValue = totalInventoryValueResult
-      ? totalInventoryValueResult.value
-      : 0;
-
-    return { totalProducts, lowStockCount, totalInventoryValue };
-  }
-}
-
-export const serviceService = new ServiceService();
+  return { totalProducts, lowStockCount, totalInventoryValue };
+};

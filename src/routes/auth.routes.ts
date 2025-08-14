@@ -1,42 +1,33 @@
 import { Router } from 'express';
-import { authController } from '../controllers/auth.controller';
+import {
+  loginController,
+  getMeController,
+  changePasswordController,
+  getAllUsersController,
+  createUserController,
+  updateUserController,
+  deleteUserController,
+} from '../controllers/auth.controller';
 import { authenticateToken } from '../middleware/auth.middleware';
 import { authorizeRoles } from '../middleware/authorization.middleware';
 
 const router = Router();
 
-router.post('/login', authController.login);
-router.get('/me', authenticateToken, authController.getMe);
-router.put(
-  '/change-password',
-  authenticateToken,
-  authController.changePassword,
-);
+// Rutas de autenticación y perfil
+router.post('/login', loginController);
+router.get('/me', authenticateToken, getMeController);
+router.put('/change-password', authenticateToken, changePasswordController);
 
 // Rutas de gestión de usuarios (solo para administradores)
-router.get(
-  '/users',
-  authenticateToken,
-  authorizeRoles('administrador'),
-  authController.getAllUsers,
-);
-router.post(
-  '/users',
-  authenticateToken,
-  authorizeRoles('administrador'),
-  authController.createUser,
-);
-router.put(
-  '/users/:id',
-  authenticateToken,
-  authorizeRoles('administrador'),
-  authController.updateUser,
-);
-router.delete(
-  '/users/:id',
-  authenticateToken,
-  authorizeRoles('administrador'),
-  authController.deleteUser,
-);
+const usersRouter = Router();
+usersRouter.use(authenticateToken, authorizeRoles('administrador'));
+
+usersRouter.get('/', getAllUsersController);
+usersRouter.post('/', createUserController);
+usersRouter.put('/:id', updateUserController);
+usersRouter.delete('/:id', deleteUserController);
+
+// Montar el router de usuarios bajo el prefijo /users
+router.use('/users', usersRouter);
 
 export default router;
