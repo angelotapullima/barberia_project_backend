@@ -19,6 +19,12 @@ import barberCommissionsRoutes from './routes/barberCommissions.routes'; // Impo
 const app = express();
 
 // Middleware
+// CORS configuration
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://bajadita-barbershop.vercel.app',
+];
+
 app.use(cors({
   origin: function (origin, callback) {
     console.log('Origin received:', origin); // Added for debugging
@@ -29,6 +35,11 @@ app.use(cors({
     }
     return callback(null, true);
   },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
+
 app.use(express.json());
 
 // Basic route to confirm server is running
