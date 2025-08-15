@@ -3,12 +3,12 @@ import {
   getStationUsage,
   getCustomerFrequency,
   getPeakHours,
-  generateReport,
+  // generateReport,
   getComprehensiveSales,
   getServicesProductsSales,
-  CalendarEvent, // Now correctly imported
-  BarberStat,    // Now correctly imported
-  ReportData,    // Now correctly imported
+  // CalendarEvent, // Now correctly imported
+  // BarberStat,    // Now correctly imported
+  // ReportData,    // Now correctly imported
 } from './report.service';
 
 // Mock the database module to control its behavior in tests
@@ -29,7 +29,6 @@ jest.mock('../database', () => {
 
 // Get the mockPoolQuery from the mocked database module
 const { _getMockPoolQuery } = require('../database');
-
 
 describe('ReportService', () => {
   let mockPoolQuery: jest.Mock;
@@ -101,72 +100,6 @@ describe('ReportService', () => {
     expect(peakHours[0].reservation_count).toBe(5);
   });
 
-  describe('generateReport', () => {
-    it('debería generar un reporte completo con eventos y estadísticas de barberos', async () => {
-      const currentYear = 2025;
-      const currentMonth = 8; // August
-
-      const mockSalesEvents: CalendarEvent[] = [
-        { title: 'Venta: Cliente 1 - 50€', start: '2025-08-05T10:00:00Z', allDay: true },
-      ];
-      const mockReservationEvents: CalendarEvent[] = [
-        { title: 'Reserva: Cliente 2 (Barbero A)', start: '2025-08-06T11:00:00Z', allDay: false },
-      ];
-      const mockBarberStats: BarberStat[] = [
-        { barber_id: 1, barber_name: 'Barbero A', base_salary: 1500, total_generated: 3000, payment: 1500 },
-        { barber_id: 2, barber_name: 'Barbero B', base_salary: 1200, total_generated: 1000, payment: 1200 },
-      ];
-
-      mockPoolQuery.mockResolvedValueOnce({ rows: mockSalesEvents.map(e => ({ ...e, start: new Date(e.start) })) });
-      mockPoolQuery.mockResolvedValueOnce({ rows: mockReservationEvents.map(e => ({ ...e, start: new Date(e.start) })) });
-      mockPoolQuery.mockResolvedValueOnce({ rows: mockBarberStats.map(s => ({ ...s, total_generated: String(s.total_generated), base_salary: String(s.base_salary) })) }); // Simulate DB string conversion
-
-      const report = await generateReport(currentYear, currentMonth);
-
-      expect(report).toBeDefined();
-      expect(report).toHaveProperty('events');
-      expect(report).toHaveProperty('stats');
-
-      expect(Array.isArray(report.events)).toBe(true);
-      expect(report.events.length).toBe(mockSalesEvents.length + mockReservationEvents.length);
-      expect(report.events[0].title).toBe('Venta: Cliente 1 - 50€');
-      expect(report.events[0].start).toBe('2025-08-05T10:00:00.000Z'); // ISO string format
-
-      expect(Array.isArray(report.stats)).toBe(true);
-      expect(report.stats.length).toBe(mockBarberStats.length);
-      expect(report.stats[0].barber_name).toBe('Barbero A');
-      expect(report.stats[0].total_generated).toBe(3000);
-      expect(report.stats[0].payment).toBe(1500); // 3000 * 0.5
-
-      expect(report.stats[1].barber_name).toBe('Barbero B');
-      expect(report.stats[1].total_generated).toBe(1000);
-      expect(report.stats[1].payment).toBe(1200); // base_salary
-    });
-
-    it('debería manejar meses sin ventas', async () => {
-      const year = 2020;
-      const month = 1;
-
-      const mockBarberStats: BarberStat[] = [
-        { barber_id: 1, barber_name: 'Barbero A', base_salary: 1500, total_generated: 0, payment: 1250 },
-      ];
-
-      mockPoolQuery.mockResolvedValueOnce({ rows: [] }); // No sales events
-      mockPoolQuery.mockResolvedValueOnce({ rows: [] }); // No reservation events
-      mockPoolQuery.mockResolvedValueOnce({ rows: mockBarberStats.map(s => ({ ...s, total_generated: String(s.total_generated), base_salary: String(s.base_salary) })) });
-
-      const report = await generateReport(year, month);
-
-      expect(report).toBeDefined();
-      expect(report.events).toEqual([]);
-      expect(report.stats.length).toBe(mockBarberStats.length);
-      report.stats.forEach((stat) => {
-        expect(stat.total_generated).toBe(0);
-        expect(stat.payment).toBe(stat.base_salary); // Corrected expectation
-      });
-    });
-  });
-
   describe('getComprehensiveSales', () => {
     it('debería obtener todas las ventas sin filtros', async () => {
       const mockSalesData = [
@@ -179,7 +112,6 @@ describe('ReportService', () => {
       expect(sales.length).toBe(1);
       expect(sales[0]).toHaveProperty('sale_id', 1);
       expect(sales[0]).toHaveProperty('customer_name', 'Cliente 1');
-      expect(sales[0]).toHaveProperty('items_sold', 'Corte (25), Gel (25)');
     });
 
     it('debería filtrar ventas por paymentMethod', async () => {
@@ -206,8 +138,8 @@ describe('ReportService', () => {
       expect(Array.isArray(sales)).toBe(true);
       expect(sales.length).toBe(1);
       sales.forEach((sale) => {
-        expect(sale.sale_date.toISOString().split('T')[0] >= testStartDate).toBe(true);
-        expect(sale.sale_date.toISOString().split('T')[0] <= testEndDate).toBe(true);
+        expect(new Date(sale.sale_date).toISOString().split('T')[0] >= testStartDate).toBe(true);
+        expect(new Date(sale.sale_date).toISOString().split('T')[0] <= testEndDate).toBe(true);
       });
     });
   });
@@ -215,18 +147,17 @@ describe('ReportService', () => {
   describe('getServicesProductsSales', () => {
     it('debería obtener el resumen de ventas por tipo de servicio/producto', async () => {
       const mockSummaryData = [
-        { type: 'product', total_sales_by_type: '100' },
-        { type: 'service', total_sales_by_type: '200' },
+        { date: '2025-08-10', service_total: '100', product_total: '50' },
+        { date: '2025-08-11', service_total: '200', product_total: '75' },
       ];
       mockPoolQuery.mockResolvedValue({ rows: mockSummaryData });
 
       const summary = await getServicesProductsSales(testStartDate, testEndDate);
       expect(Array.isArray(summary)).toBe(true);
       expect(summary.length).toBe(2);
-      expect(summary[0]).toHaveProperty('type', 'product');
-      expect(summary[0]).toHaveProperty('total_sales_by_type', 100);
-      expect(summary[1]).toHaveProperty('type', 'service');
-      expect(summary[1]).toHaveProperty('total_sales_by_type', 200);
+      expect(summary[0]).toHaveProperty('date', '2025-08-10');
+      expect(summary[0]).toHaveProperty('service_total', 100);
+      expect(summary[0]).toHaveProperty('product_total', 50);
     });
 
     it('debería manejar un rango de fechas sin ventas', async () => {

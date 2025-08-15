@@ -7,7 +7,7 @@
     "start": "node dist/server.js",
     "dev": "nodemon --watch src --exec ts-node src/server.ts",
     "test": "jest",
-    "test:coverage": "DOTENV_CONFIG_PATH=.env.test jest --coverage --verbose --forceExit --setupFiles=dotenv/config",
+    "test:coverage": "cross-env DOTENV_CONFIG_PATH=.env.test jest --coverage --verbose --forceExit --setupFiles=dotenv/config",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write ."
@@ -16,10 +16,10 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@types/jest": "^30.0.0",
     "@types/bcrypt": "^6.0.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
+    "@types/jest": "^30.0.0",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.2.1",
     "@types/pg": "^8.15.5",
@@ -34,6 +34,7 @@
     "typescript": "^5.9.2"
   },
   "devDependencies": {
+    "cross-env": "^10.0.0",
     "eslint": "^8.57.0",
     "eslint-config-airbnb-base": "^15.0.0",
     "eslint-config-prettier": "^10.1.8",

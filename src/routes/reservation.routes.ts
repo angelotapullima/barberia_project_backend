@@ -6,18 +6,28 @@ import {
   updateReservationController,
   deleteReservationController,
   completeReservationController,
+  addProductToReservationController,
+  removeProductFromReservationController,
+  getCalendarViewDataController,
 } from '../controllers/reservation.controller';
 
 const router = Router();
 
-// Rutas para el CRUD de reservaciones
+// Aggregated view data
+router.get('/view/calendar', getCalendarViewDataController);
+
+// Basic CRUD
 router.get('/', getAllReservationsController);
 router.get('/:id', getReservationByIdController);
 router.post('/', createReservationController);
 router.put('/:id', updateReservationController);
 router.delete('/:id', deleteReservationController);
 
-// Ruta para marcar una reservación como completada y generar la venta
+// Complete reservation and create sale
 router.post('/:id/complete', completeReservationController);
+
+// Add/remove products from an active reservation
+router.post('/:id/products', addProductToReservationController);
+router.delete('/:id/products/:reservationProductId', removeProductFromReservationController);
 
 export default router;
