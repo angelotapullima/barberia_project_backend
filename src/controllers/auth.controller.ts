@@ -18,6 +18,7 @@ export const loginController = async (req: Request, res: Response): Promise<void
   const { email, password } = req.body;
 
   console.log('Attempting login for email:', email);
+  console.log('Received password (plaintext - FOR DEBUG ONLY):', password);
 
   if (!email || !password) {
     res.status(400).json({ message: 'Email y contraseña son requeridos.' });
