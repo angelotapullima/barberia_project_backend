@@ -17,6 +17,8 @@ import {
 export const loginController = async (req: Request, res: Response): Promise<void> => {
   const { email, password } = req.body;
 
+  console.log('Attempting login for email:', email);
+
   if (!email || !password) {
     res.status(400).json({ message: 'Email y contraseña son requeridos.' });
     return;
@@ -24,12 +26,17 @@ export const loginController = async (req: Request, res: Response): Promise<void
 
   try {
     const user = await findByEmail(email);
+    console.log('User found by email:', user ? user.email : 'None');
+    console.log('User password hash (from DB):', user ? user.password : 'None');
+
     if (!user || !user.password) {
       res.status(401).json({ message: 'Credenciales inválidas.' });
       return;
     }
 
     const isPasswordValid = await comparePassword(password, user.password);
+    console.log('Is password valid (bcrypt compare result):', isPasswordValid);
+
     if (!isPasswordValid) {
       res.status(401).json({ message: 'Credenciales inválidas.' });
       return;
