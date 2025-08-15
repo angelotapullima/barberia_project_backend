@@ -1,7 +1,7 @@
-import setup from '../database';
+import getPool from '../database';
 import bcrypt from 'bcrypt';
 
-const pool = setup();
+const pool = getPool();
 
 // --- INTERFACE ---
 interface User {

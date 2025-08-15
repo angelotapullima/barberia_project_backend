@@ -9,7 +9,12 @@ import reportRoutes from './routes/report.routes';
 import reservationRoutes from './routes/reservation.routes'; // Import reservation routes
 import authRoutes from './routes/auth.routes';
 import settingRoutes from './routes/setting.routes';
-import draftSaleRoutes from './routes/draftSale.routes'; // New import for draft sale routes
+
+import productRoutes from './routes/product.routes'; // Import product routes
+import dashboardRoutes from './routes/dashboard.routes'; // Import dashboard routes
+import posRoutes from './routes/pos.routes'; // Import POS routes
+import inventoryRoutes from './routes/inventory.routes'; // Import inventory routes
+import barberCommissionsRoutes from './routes/barberCommissions.routes'; // Import barber commissions routes
 
 const app = express();
 
@@ -36,7 +41,12 @@ pool.connect()
     app.use('/api/reservations', reservationRoutes); // Use reservation routes
     app.use('/api/auth', authRoutes); // Use auth routes
     app.use('/api/settings', settingRoutes); // Use settings routes
-    app.use('/api/draft-sales', draftSaleRoutes); // New: Use draft sale routes
+    app.use('/api/products', productRoutes); // Use product routes
+    app.use('/api/dashboard', dashboardRoutes); // Use dashboard routes
+    app.use('/api/pos', posRoutes); // Use POS routes
+    app.use('/api/inventory', inventoryRoutes); // Use inventory routes
+    app.use('/api/barber-commissions', barberCommissionsRoutes); // Use barber commissions routes
+    
   })
   .catch((err: any) => {
     console.error('Failed to connect to the database:', err);

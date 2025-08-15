@@ -16,7 +16,8 @@ RESTART IDENTITY CASCADE;
 INSERT INTO users (name, email, password, role) VALUES
 ('Admin User', 'admin@example.com', '$2b$10$E.w2a/oG.Pz4.w/jKzE95uK.E5.f8rE6.yG.w/jKzE95uK.E5.f8', 'administrador'), -- password: adminpassword
 ('Cashier User', 'cashier@example.com', '$2b$10$E.w2a/oG.Pz4.w/jKzE95uK.E5.f8rE6.yG.w/jKzE95uK.E5.f8', 'cajero'), -- password: cashierpassword
-('Barber User 1', 'barber1@example.com', '$2b$10$E.w2a/oG.Pz4.w/jKzE95uK.E5.f8rE6.yG.w/jKzE95uK.E5.f8', 'cajero'); -- password: barberpassword
+('Barber User 1', 'barber1@example.com', '$2b$10$E.w2a/oG.Pz4.w/jKzE95uK.E5.f8rE6.yG.w/jKzE95uK.E5.f8', 'cajero'), -- password: cashierpassword
+('New Admin User', 'newadmin@example.com', '$2b$10$3J7J.VnJBCn6hqVsNi2b1.msw9CEJ0feAVy4T3s8whHrwgUPIzMGK', 'administrador'); -- password: newadminpassword
 
 -- Insert data for settings table
 INSERT INTO settings (setting_key, setting_value) VALUES
@@ -123,7 +124,7 @@ INSERT INTO sale_items (sale_id, service_id, item_type, item_name, price, price_
 (3001, 1, 'service', 'Corte de Cabello', 25, 25, 1),
 (3002, 2, 'service', 'Afeitado Clásico', 20, 20, 1);
 
--- Sale Items for Direct Sales
+-- Direct Sales (not linked to reservations)
 INSERT INTO sale_items (sale_id, service_id, item_type, item_name, price, price_at_sale, quantity) VALUES
 (5001, 5, 'product', 'Gel Fijador Fuerte', 15, 15, 2), -- 2 units of product
 (5002, 1, 'service', 'Corte de Cabello', 25, 25, 1),
@@ -138,3 +139,78 @@ INSERT INTO draft_sales (id, reservation_id, client_name, barber_id, total_amoun
 INSERT INTO draft_sale_items (draft_sale_id, item_id, item_type, quantity, price_at_draft) VALUES
 (1, 3, 'service', 1, 40), -- Corte y Barba for Cliente Hoy 3
 (2, 4, 'service', 1, 15); -- Lavado y Peinado for Cliente Semana 4
+
+-- New Generated Data --
+INSERT INTO users (id, name, email, password, role) VALUES (10, 'New User 0', 'newuser0@example.com', '$2b$10$u1vAofpFZaN5q.xMMGR/k.6xfUEsi/V19zIMBsE89hMjMJDCsb.Ti', 'barber');
+INSERT INTO users (id, name, email, password, role) VALUES (11, 'New User 1', 'newuser1@example.com', '$2b$10$4btbN8f9bYAmLnyfptUrcuMIHcKBGgrB8e3IP8C069C4G3liBlM22', 'barber');
+INSERT INTO users (id, name, email, password, role) VALUES (12, 'New User 2', 'newuser2@example.com', '$2b$10$mRJ9MoU.Ck1QA2eQZ7nihucOM3xfWVAjhPBsu8ZyXvYXpJuqBF4NC', 'client');
+INSERT INTO users (id, name, email, password, role) VALUES (13, 'New User 3', 'newuser3@example.com', '$2b$10$CCRmZbbw3wW969L0khoA6ufCMZZRKwxNEu4WVhT/luj8jpfUWtVnu', 'client');
+INSERT INTO users (id, name, email, password, role) VALUES (14, 'New User 4', 'newuser4@example.com', '$2b$10$EdNumAFQm5EV3aWLzb/uDeGSDVzMXEGopE3LajF7y5wLqcTSAvDQa', 'client');
+INSERT INTO barbers (id, name, email, phone, specialty, station_id, base_salary) VALUES (10, 'New Barber 0', 'newbarber0@example.com', '111-222-4440', 'Modern Cuts', 4, 1300);
+INSERT INTO barbers (id, name, email, phone, specialty, station_id, base_salary) VALUES (11, 'New Barber 1', 'newbarber1@example.com', '111-222-4441', 'Classic Shaves', 3, 1400);
+
+INSERT INTO reservations (id, barber_id, station_id, client_name, client_phone, client_email, service_id, start_time, end_time, status) VALUES (500, 1, 1, 'New Client 0', '444-555-7770', 'newclient0@example.com', 8, '2025-08-14 15:00:00', '2025-08-14 15:20:00', 'completed');
+INSERT INTO reservations (id, barber_id, station_id, client_name, client_phone, client_email, service_id, start_time, end_time, status) VALUES (501, 11, 3, 'New Client 1', '444-555-7771', 'newclient1@example.com', 6, '2025-08-14 10:00:00', '2025-08-14 10:25:00', 'pending');
+INSERT INTO reservations (id, barber_id, station_id, client_name, client_phone, client_email, service_id, start_time, end_time, status) VALUES (502, 1, 1, 'New Client 2', '444-555-7772', 'newclient2@example.com', 1, '2025-08-13 16:00:00', '2025-08-13 16:30:00', 'completed');
+INSERT INTO reservations (id, barber_id, station_id, client_name, client_phone, client_email, service_id, start_time, end_time, status) VALUES (503, 10, 4, 'New Client 3', '444-555-7773', 'newclient3@example.com', 5, '2025-08-07 11:00:00', '2025-08-07 11:40:00', 'confirmed');
+INSERT INTO reservations (id, barber_id, station_id, client_name, client_phone, client_email, service_id, start_time, end_time, status) VALUES (504, 2, 2, 'New Client 4', '444-555-7774', 'newclient4@example.com', 2, '2025-07-15 14:00:00', '2025-07-15 14:25:00', 'completed');
+INSERT INTO reservations (id, barber_id, station_id, client_name, client_phone, client_email, service_id, start_time, end_time, status) VALUES (505, 3, 3, 'New Client 0', '444-555-7770', 'newclient0@example.com', 7, '2025-08-15 09:00:00', '2025-08-15 09:30:00', 'pending');
+INSERT INTO reservations (id, barber_id, station_id, client_name, client_phone, client_email, service_id, start_time, end_time, status) VALUES (506, 4, 4, 'New Client 1', '444-555-7771', 'newclient1@example.com', 3, '2025-08-14 13:00:00', '2025-08-14 13:50:00', 'confirmed');
+INSERT INTO reservations (id, barber_id, station_id, client_name, client_phone, client_email, service_id, start_time, end_time, status) VALUES (507, 1, 1, 'New Client 2', '444-555-7772', 'newclient2@example.com', 4, '2025-08-13 10:00:00', '2025-08-13 10:20:00', 'completed');
+INSERT INTO reservations (id, barber_id, station_id, client_name, client_phone, client_email, service_id, start_time, end_time, status) VALUES (508, 11, 3, 'New Client 3', '444-555-7773', 'newclient3@example.com', 8, '2025-08-07 16:00:00', '2025-08-07 16:20:00', 'cancelled');
+INSERT INTO reservations (id, barber_id, station_id, client_name, client_phone, client_email, service_id, start_time, end_time, status) VALUES (509, 10, 4, 'New Client 4', '444-555-7774', 'newclient4@example.com', 6, '2025-07-15 11:00:00', '2025-07-15 11:25:00', 'completed');
+INSERT INTO reservations (id, barber_id, station_id, client_name, client_phone, client_email, service_id, start_time, end_time, status) VALUES (510, 2, 2, 'New Client 0', '444-555-7770', 'newclient0@example.com', 1, '2025-08-15 14:00:00', '2025-08-15 14:30:00', 'pending');
+INSERT INTO reservations (id, barber_id, station_id, client_name, client_phone, client_email, service_id, start_time, end_time, status) VALUES (511, 3, 3, 'New Client 1', '444-555-7771', 'newclient1@example.com', 5, '2025-08-14 11:00:00', '2025-08-14 11:40:00', 'confirmed');
+INSERT INTO reservations (id, barber_id, station_id, client_name, client_phone, client_email, service_id, start_time, end_time, status) VALUES (512, 4, 4, 'New Client 2', '444-555-7772', 'newclient2@example.com', 2, '2025-08-13 15:00:00', '2025-08-13 15:25:00', 'completed');
+INSERT INTO reservations (id, barber_id, station_id, client_name, client_phone, client_email, service_id, start_time, end_time, status) VALUES (513, 1, 1, 'New Client 3', '444-555-7773', 'newclient3@example.com', 7, '2025-08-07 13:00:00', '2025-08-07 13:30:00', 'completed');
+INSERT INTO reservations (id, barber_id, station_id, client_name, client_phone, client_email, service_id, start_time, end_time, status) VALUES (514, 11, 3, 'New Client 4', '444-555-7774', 'newclient4@example.com', 3, '2025-07-15 10:00:00', '2025-07-15 10:50:00', 'completed');
+INSERT INTO sales (id, customer_name, total_amount, sale_date) VALUES (6000, 'New Client 0', 25.00, '2025-08-14');
+INSERT INTO sale_items (id, sale_id, service_id, item_type, item_name, price, quantity, price_at_sale) VALUES (10000, 6000, 1, 'service', 'Corte de Cabello', 25, 1, 25.00);
+INSERT INTO sales (id, customer_name, total_amount, sale_date) VALUES (6001, 'New Client 1', 30.00, '2025-08-14');
+INSERT INTO sale_items (id, sale_id, service_id, item_type, item_name, price, quantity, price_at_sale) VALUES (10001, 6001, 5, 'product', 'Gel Fijador Fuerte', 15, 2, 15.00);
+INSERT INTO sales (id, customer_name, total_amount, sale_date) VALUES (6002, 'New Client 2', 40.00, '2025-08-13');
+INSERT INTO sale_items (id, sale_id, service_id, item_type, item_name, price, quantity, price_at_sale) VALUES (10002, 6002, 3, 'service', 'Corte y Barba', 40, 1, 40.00);
+INSERT INTO sales (id, customer_name, total_amount, sale_date) VALUES (6003, 'New Client 3', 20.00, '2025-08-07');
+INSERT INTO sale_items (id, sale_id, service_id, item_type, item_name, price, quantity, price_at_sale) VALUES (10003, 6003, 2, 'service', 'Afeitado Clásico', 20, 1, 20.00);
+INSERT INTO sales (id, customer_name, total_amount, sale_date) VALUES (6004, 'New Client 4', 50.00, '2025-07-15');
+INSERT INTO sale_items (id, sale_id, service_id, item_type, item_name, price, quantity, price_at_sale) VALUES (10004, 6004, 1, 'service', 'Corte de Cabello', 25, 2, 25.00);
+INSERT INTO sales (id, customer_name, total_amount, sale_date) VALUES (6005, 'New Client 0', 15.00, '2025-08-15');
+INSERT INTO sale_items (id, sale_id, service_id, item_type, item_name, price, quantity, price_at_sale) VALUES (10005, 6005, 4, 'service', 'Lavado y Peinado', 15, 1, 15.00);
+INSERT INTO sales (id, customer_name, total_amount, sale_date) VALUES (6006, 'New Client 1', 40.00, '2025-08-14');
+INSERT INTO sale_items (id, sale_id, service_id, item_type, item_name, price, quantity, price_at_sale) VALUES (10006, 6006, 3, 'service', 'Corte y Barba', 40, 1, 40.00);
+INSERT INTO sales (id, customer_name, total_amount, sale_date) VALUES (6007, 'New Client 2', 25.00, '2025-08-13');
+INSERT INTO sale_items (id, sale_id, service_id, item_type, item_name, price, quantity, price_at_sale) VALUES (10007, 6007, 1, 'service', 'Corte de Cabello', 25, 1, 25.00);
+INSERT INTO sales (id, customer_name, total_amount, sale_date) VALUES (6008, 'New Client 3', 30.00, '2025-08-07');
+INSERT INTO sale_items (id, sale_id, service_id, item_type, item_name, price, quantity, price_at_sale) VALUES (10008, 6008, 5, 'product', 'Gel Fijador Fuerte', 15, 2, 15.00);
+INSERT INTO sales (id, customer_name, total_amount, sale_date) VALUES (6009, 'New Client 4', 20.00, '2025-07-15');
+INSERT INTO sale_items (id, sale_id, service_id, item_type, item_name, price, quantity, price_at_sale) VALUES (10009, 6009, 2, 'service', 'Afeitado Clásico', 20, 1, 20.00);
+INSERT INTO sales (id, customer_name, total_amount, sale_date) VALUES (6010, 'New Client 0', 40.00, '2025-08-15');
+INSERT INTO sale_items (id, sale_id, service_id, item_type, item_name, price, quantity, price_at_sale) VALUES (10010, 6010, 3, 'service', 'Corte y Barba', 40, 1, 40.00);
+INSERT INTO sales (id, customer_name, total_amount, sale_date) VALUES (6011, 'New Client 1', 25.00, '2025-08-14');
+INSERT INTO sale_items (id, sale_id, service_id, item_type, item_name, price, quantity, price_at_sale) VALUES (10011, 6011, 1, 'service', 'Corte de Cabello', 25, 1, 25.00);
+INSERT INTO sales (id, customer_name, total_amount, sale_date) VALUES (6012, 'New Client 2', 30.00, '2025-08-13');
+INSERT INTO sale_items (id, sale_id, service_id, item_type, item_name, price, quantity, price_at_sale) VALUES (10012, 6012, 5, 'product', 'Gel Fijador Fuerte', 15.00, 2, 15.00);
+INSERT INTO sales (id, customer_name, total_amount, sale_date) VALUES (6013, 'New Client 3', 20.00, '2025-08-07');
+INSERT INTO sale_items (id, sale_id, service_id, item_type, item_name, price, quantity, price_at_sale) VALUES (10013, 6013, 2, 'service', 'Afeitado Clásico', 20.00, 1, 20.00);
+INSERT INTO sales (id, customer_name, total_amount, sale_date) VALUES (6014, 'New Client 4', 40.00, '2025-07-15');
+INSERT INTO sale_items (id, sale_id, service_id, item_type, item_name, price, quantity, price_at_sale) VALUES (10014, 6014, 3, 'service', 'Corte y Barba', 40.00, 1, 40.00);
+INSERT INTO draft_sales (id, barber_id, client_name, total_amount) VALUES (100, 1, 'New Client 0', 25.00);
+INSERT INTO draft_sale_items (id, draft_sale_id, item_id, item_type, quantity, price_at_draft) VALUES (1000, 100, 1, 'service', 1, 25.00);
+INSERT INTO draft_sales (id, barber_id, client_name, total_amount) VALUES (101, 11, 'New Client 1', 30.00);
+INSERT INTO draft_sale_items (id, draft_sale_id, item_id, item_type, quantity, price_at_draft) VALUES (1001, 101, 5, 'service', 2, 15.00);
+INSERT INTO draft_sales (id, barber_id, client_name, total_amount) VALUES (102, 1, 'New Client 2', 40.00);
+INSERT INTO draft_sale_items (id, draft_sale_id, item_id, item_type, quantity, price_at_draft) VALUES (1002, 102, 3, 'service', 1, 40.00);
+INSERT INTO draft_sales (id, barber_id, client_name, total_amount) VALUES (103, 10, 'New Client 3', 20.00);
+INSERT INTO draft_sale_items (id, draft_sale_id, item_id, item_type, quantity, price_at_draft) VALUES (1003, 103, 2, 'service', 1, 20.00);
+INSERT INTO draft_sales (id, barber_id, client_name, total_amount) VALUES (104, 2, 'New Client 4', 50.00);
+INSERT INTO draft_sale_items (id, draft_sale_id, item_id, item_type, quantity, price_at_draft) VALUES (1004, 104, 1, 'service', 2, 25.00);
+INSERT INTO draft_sales (id, barber_id, client_name, total_amount) VALUES (105, 3, 'New Client 0', 15.00);
+INSERT INTO draft_sale_items (id, draft_sale_id, item_id, item_type, quantity, price_at_draft) VALUES (1005, 105, 4, 'service', 1, 15.00);
+INSERT INTO draft_sales (id, barber_id, client_name, total_amount) VALUES (106, 4, 'New Client 1', 40.00);
+INSERT INTO draft_sale_items (id, draft_sale_id, item_id, item_type, quantity, price_at_draft) VALUES (1006, 106, 3, 'service', 1, 40.00);
+INSERT INTO draft_sales (id, barber_id, client_name, total_amount) VALUES (107, 1, 'New Client 2', 25.00);
+INSERT INTO draft_sale_items (id, draft_sale_id, item_id, item_type, quantity, price_at_draft) VALUES (1007, 107, 1, 'service', 1, 25.00);
+INSERT INTO draft_sales (id, barber_id, client_name, total_amount) VALUES (108, 11, 'New Client 3', 30.00);
+INSERT INTO draft_sale_items (id, draft_sale_id, item_id, item_type, quantity, price_at_draft) VALUES (1008, 108, 5, 'service', 2, 15.00);
+INSERT INTO draft_sales (id, barber_id, client_name, total_amount) VALUES (109, 10, 'New Client 4', 20.00);
+INSERT INTO draft_sale_items (id, draft_sale_id, item_id, item_type, quantity, price_at_draft) VALUES (1009, 109, 2, 'service', 1, 20.00);

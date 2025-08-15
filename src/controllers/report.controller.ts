@@ -7,7 +7,6 @@ import {
   getStationUsage,
   getCustomerFrequency,
   getPeakHours,
-  generateReport, // Import generateReport from service
 } from '../services/report.service';
 
 const handleReportError = (res: Response, error: any, message: string) => {
@@ -100,19 +99,5 @@ export const getDetailedBarberServiceSalesReportController = async (req: Request
     res.json(sales);
   } catch (error) {
     handleReportError(res, error, 'Error al obtener el reporte detallado de servicios por barbero.');
-  }
-};
-
-export const generateReportController = async (req: Request, res: Response): Promise<void> => {
-  const { year, month } = req.query;
-  if (!year || !month) {
-    res.status(400).json({ message: 'Los parámetros year y month son requeridos.' });
-    return;
-  }
-  try {
-    const report = await generateReport(Number(year), Number(month));
-    res.json(report);
-  } catch (error) {
-    handleReportError(res, error, 'Error al generar el reporte.');
   }
 };

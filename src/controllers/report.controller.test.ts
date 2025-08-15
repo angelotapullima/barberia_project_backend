@@ -7,7 +7,6 @@ import {
   getPeakHoursReportController,
   getBarberPaymentsReportController,
   getDetailedBarberServiceSalesReportController,
-  generateReportController, // Newly added controller function
 } from './report.controller';
 import * as reportService from '../services/report.service'; // Import all functions from service
 
@@ -42,41 +41,6 @@ describe('ReportController', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
-  });
-
-  describe('generateReportController', () => {
-    it('debería generar un reporte general', async () => {
-      const reportData = { events: [], stats: [] };
-      (reportService.generateReport as jest.Mock).mockResolvedValue(reportData);
-
-      mockRequest.query = { year: '2025', month: '8' };
-
-      await generateReportController(mockRequest as Request, mockResponse as Response);
-
-      expect(reportService.generateReport).toHaveBeenCalledWith(2025, 8);
-      expect(mockResponse.json).toHaveBeenCalledWith(reportData);
-      expect(mockResponse.status).not.toHaveBeenCalledWith(500);
-    });
-
-    it('debería manejar parámetros faltantes al generar reporte general', async () => {
-      mockRequest.query = { year: '2025' }; // Missing month
-
-      await generateReportController(mockRequest as Request, mockResponse as Response);
-
-      expect(mockResponse.status).toHaveBeenCalledWith(400);
-      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Los parámetros year y month son requeridos.' });
-    });
-
-    it('debería manejar errores al generar un reporte general', async () => {
-      (reportService.generateReport as jest.Mock).mockRejectedValue(new Error('Error de DB'));
-
-      mockRequest.query = { year: '2025', month: '8' };
-
-      await generateReportController(mockRequest as Request, mockResponse as Response);
-
-      expect(mockResponse.status).toHaveBeenCalledWith(500);
-      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Error al generar el reporte.' });
-    });
   });
 
   describe('getComprehensiveSalesReportController', () => {

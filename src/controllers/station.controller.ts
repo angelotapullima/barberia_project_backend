@@ -23,7 +23,7 @@ export const createStationController = async (req: Request, res: Response): Prom
     return;
   }
   try {
-    const newStation = await createStation({ name, description });
+    const newStation = await createStation({ name, description, is_active: true });
     if ('error' in newStation) {
       res.status(400).json(newStation);
       return;
@@ -36,7 +36,7 @@ export const createStationController = async (req: Request, res: Response): Prom
 };
 
 export const updateStationController = async (req: Request, res: Response): Promise<void> => {
-  const { name, description } = req.body;
+  const { name, description, is_active } = req.body;
   const { id } = req.params;
   if (!name) {
     res.status(400).json({ message: 'El nombre es requerido' });
@@ -46,6 +46,7 @@ export const updateStationController = async (req: Request, res: Response): Prom
     const updatedStation = await updateStation(Number(id), {
       name,
       description,
+      is_active,
     });
     if (!updatedStation) {
       res.status(404).json({ message: 'Estación no encontrada' });
@@ -66,7 +67,7 @@ export const deleteStationController = async (req: Request, res: Response): Prom
   const { id } = req.params;
   try {
     const result = await deleteStation(Number(id));
-    if ('error' in result) {
+    if (result && 'error' in result) {
       res.status(400).json(result);
       return;
     }

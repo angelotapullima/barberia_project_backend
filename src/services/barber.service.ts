@@ -1,44 +1,49 @@
-import setup from '../database';
+import getPool from '../database';
+import { Barber } from '../models/barber.model';
 
-const pool = setup();
+const pool = getPool();
 
-export const getAllBarbers = async () => {
-  const result = await pool.query('SELECT * FROM barbers ORDER BY id ASC');
+export const getAllBarbers = async (): Promise<Barber[]> => {
+  const result = await pool.query('SELECT * FROM barbers WHERE is_active = true ORDER BY name ASC');
   return result.rows;
 };
 
-export const getBarberById = async (id: number) => {
+export const getBarberById = async (id: number): Promise<Barber | null> => {
   const result = await pool.query('SELECT * FROM barbers WHERE id = $1', [id]);
+  return result.rows[0] || null;
+};
+
+export const createBarber = async (barber: Omit<Barber, 'id' | 'created_at' | 'updated_at'>): Promise<Barber> => {
+  const { name, email, phone, specialty, photo_url, station_id, base_salary, is_active } = barber;
+  const result = await pool.query(
+    'INSERT INTO barbers (name, email, phone, specialty, photo_url, station_id, base_salary, is_active) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
+    [name, email, phone, specialty, photo_url, station_id, base_salary, is_active ?? true]
+  );
   return result.rows[0];
 };
 
-export const createBarber = async (barber: any) => {
-  const { name, email, phone, specialty, photo_url, station_id, base_salary } = barber;
+export const updateBarber = async (id: number, barber: Partial<Omit<Barber, 'id' | 'created_at' | 'updated_at'>>): Promise<Barber | null> => {
+  const fields = Object.keys(barber).map((key, index) => `"${key}" = $${index + 1}`)
+    .join(', ');
+  const values = Object.values(barber);
+
+  if (fields.length === 0) {
+    return getBarberById(id);
+  }
+
+  const query = `UPDATE barbers SET ${fields}, updated_at = NOW() WHERE id = $${values.length + 1} RETURNING *`;
+  const result = await pool.query(query, [...values, id]);
+
+  return result.rows[0] || null;
+};
+
+// Soft delete by setting is_active to false
+export const deleteBarber = async (id: number): Promise<Barber | null> => {
   const result = await pool.query(
-    'INSERT INTO barbers (name, email, phone, specialty, photo_url, station_id, base_salary) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-    [name, email, phone, specialty, photo_url, station_id, base_salary]
+    'UPDATE barbers SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING *',
+    [id]
   );
-  return { id: result.rows[0].id, ...barber };
-};
-
-export const updateBarber = async (id: number, barber: any) => {
-  const { name, email, phone, specialty, photo_url, station_id, base_salary } = barber;
-  const result = await pool.query( // Capture the result to check rowCount
-    'UPDATE barbers SET name = $1, email = $2, phone = $3, specialty = $4, photo_url = $5, station_id = $6, base_salary = $7, updated_at = NOW() WHERE id = $8',
-    [name, email, phone, specialty, photo_url, station_id, base_salary, id]
-  );
-  if (result.rowCount === 0) { // If no rows were updated
-    return null; // Return null as per test expectation
-  }
-  return { id, ...barber };
-};
-
-export const deleteBarber = async (id: number) => {
-  const result = await pool.query('DELETE FROM barbers WHERE id = $1', [id]); // Capture the result to check rowCount
-  if (result.rowCount === 0) { // If no rows were deleted
-    return { message: 'Barber not found' }; // Return 'Barber not found' as per test expectation
-  }
-  return { message: 'Barber deleted successfully' };
+  return result.rows[0] || null;
 };
 
 export const getBarberAvailability = async (barberId: number, date: string) => {
