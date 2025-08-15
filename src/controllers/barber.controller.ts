@@ -62,10 +62,13 @@ export const deleteBarberController = async (req: Request, res: Response): Promi
   const { id } = req.params;
   try {
     const result = await deleteBarber(Number(id));
-    if ('error' in result) {
-        res.status(400).json(result);
-    } else {
+    if (result.message === 'Barber not found') {
+        res.status(404).json(result);
+    } else if (result.message === 'Barber deleted successfully') {
         res.status(204).send();
+    } else {
+        // Handle other potential error messages from the service
+        res.status(400).json(result);
     }
   } catch (error) {
     console.error('Error deleting barber:', error);

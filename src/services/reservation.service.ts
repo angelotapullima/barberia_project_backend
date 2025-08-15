@@ -42,61 +42,61 @@ export interface Reservation {
   sale?: Sale;
 }
 
-export const getAllReservations = async (
-  page: number,
-  limit: number,
-  includeSaleDetails: boolean = false,
-): Promise<{ reservations: Reservation[]; total: number; page: number }> => {
-  const offset = (page - 1) * limit;
+function buildReservationQuery(includeSaleDetails: boolean): { query: string; selectFields: string[] } {
+  const selectFields = [
+    'r.id', 'r.barber_id', 'b.name as barber_name',
+    'r.station_id', 'st.name as station_name', 'r.client_name', 'r.client_phone', 'r.client_email',
+    'r.start_time', 'r.end_time', 'r.service_id', 's.name as service_name',
+    'r.status', 'r.notes', 'r.created_at'
+  ];
+  if (includeSaleDetails) {
+    selectFields.push(
+      'sale.id as sale_id', 'sale.total_amount as sale_total',
+      'sale.payment_method as sale_payment_method',
+      'si.id as sale_item_id', 'si.item_name as sale_item_name',
+      'si.price_at_sale as sale_item_price', 'si.quantity as sale_item_quantity'
+    );
+  }
   let query = `
     SELECT
-        r.id, r.barber_id, b.name as barber_name,
-        r.station_id, st.name as station_name, r.client_name, r.client_phone, r.client_email,
-        r.start_time, r.end_time, r.service_id, s.name as service_name,
-        r.status, r.notes, r.created_at
-  `;
-  const params: any[] = [];
-
-  let countQuery = `SELECT COUNT(*) FROM reservations r`;
-  const countParams: any[] = [];
-  let countParamIndex = 1;
-
-  if (includeSaleDetails) {
-    query += `,
-        sale.id as sale_id, sale.total_amount as sale_total,
-        sale.payment_method as sale_payment_method,
-        si.id as sale_item_id, si.item_name as sale_item_name,
-        si.price_at_sale as sale_item_price, si.quantity as sale_item_quantity
-    `;
-  }
-
-  query += `
+      ${selectFields.join(', ')}
     FROM reservations r
     JOIN barbers b ON r.barber_id = b.id
     JOIN services s ON r.service_id = s.id
     LEFT JOIN stations st ON r.station_id = st.id
   `;
-
   if (includeSaleDetails) {
     query += `
-    LEFT JOIN sales sale ON r.id = sale.reservation_id
-    LEFT JOIN sale_items si ON sale.id = si.sale_id
+      LEFT JOIN sales sale ON r.id = sale.reservation_id
+      LEFT JOIN sale_items si ON sale.id = si.sale_id
     `;
   }
-
   query += ` ORDER BY r.start_time DESC `;
+  return { query, selectFields };
+}
 
-  query += ` LIMIT $1`;
-  params.push(limit);
+function addSaleItemToReservation(reservation: Reservation, row: any) {
+  if (!reservation.sale) return;
+  const existingItem = reservation.sale.sale_items.find(
+    (item) => item.id === row.sale_item_id,
+  );
+  if (!existingItem) {
+    reservation.sale.sale_items.push({
+      id: row.sale_item_id,
+      item_id: row.sale_item_id,
+      item_name: row.sale_item_name,
+      price: Number(row.sale_item_price),
+      price_at_sale: Number(row.sale_item_price),
+      quantity: Number(row.sale_item_quantity),
+    });
+  }
+}
 
-  query += ` OFFSET $2`;
-  params.push(offset);
-
-  const { rows } = await pool.query(query, params);
-  const totalResult = await pool.query(countQuery, countParams);
-  const total = Number(totalResult.rows[0].count);
+function mapReservationRows(
+  rows: any[],
+  includeSaleDetails: boolean
+): Reservation[] {
   const reservationsMap = new Map<number, Reservation>();
-
   for (const row of rows) {
     if (!reservationsMap.has(row.id)) {
       reservationsMap.set(row.id, {
@@ -104,7 +104,7 @@ export const getAllReservations = async (
         barber_id: row.barber_id,
         barber_name: row.barber_name,
         station_id: row.station_id,
-        station_name: row.station_name, // <--- Added this line
+        station_name: row.station_name,
         client_name: row.client_name,
         client_phone: row.client_phone,
         client_email: row.client_email,
@@ -125,28 +125,34 @@ export const getAllReservations = async (
           : undefined,
       });
     }
-
     if (includeSaleDetails && row.sale_id && row.sale_item_id) {
       const reservation = reservationsMap.get(row.id)!;
-      if (reservation.sale) {
-        const existingItem = reservation.sale.sale_items.find(
-          (item) => item.id === row.sale_item_id,
-        );
-        if (!existingItem) {
-          reservation.sale.sale_items.push({
-            id: row.sale_item_id,
-            item_id: row.sale_item_id,
-            item_name: row.sale_item_name,
-            price: Number(row.sale_item_price),
-            price_at_sale: Number(row.sale_item_price),
-            quantity: Number(row.sale_item_quantity),
-          });
-        }
-      }
+      addSaleItemToReservation(reservation, row);
     }
   }
+  return Array.from(reservationsMap.values());
+}
 
-  return { reservations: Array.from(reservationsMap.values()), total, page };
+export const getAllReservations = async (
+  page: number,
+  limit: number,
+  includeSaleDetails: boolean = false,
+): Promise<{ reservations: Reservation[]; total: number; page: number }> => {
+  const offset = (page - 1) * limit;
+  const { query } = buildReservationQuery(includeSaleDetails);
+
+  const paginatedQuery = `${query} LIMIT $1 OFFSET $2`;
+  const params = [limit, offset];
+
+  const { rows } = await pool.query(paginatedQuery, params);
+
+  const countQuery = `SELECT COUNT(*) FROM reservations r`;
+  const totalResult = await pool.query(countQuery, []);
+  const total = Number(totalResult.rows[0].count);
+
+  const reservations = mapReservationRows(rows, includeSaleDetails);
+
+  return { reservations, total, page };
 };
 
 export const getReservationById = async (id: number): Promise<Reservation | null> => {

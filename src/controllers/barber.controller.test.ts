@@ -186,8 +186,8 @@ describe('BarberController', () => {
 
     await deleteBarberController(mockRequest as Request, mockResponse as Response);
 
-    expect(mockResponse.status).toHaveBeenCalledWith(204); // Corrected expectation
-    expect(mockResponse.send).toHaveBeenCalledTimes(1); // Corrected expectation
+    expect(mockResponse.status).toHaveBeenCalledWith(404);
+    expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Barber not found' });
   });
 
   it('debería manejar errores al eliminar barbero', async () => {

@@ -4,6 +4,8 @@ import {
   createSale,
   getSaleById,
   getSaleByReservationId,
+  getSalesSummaryByDateRange,
+  getSalesSummaryByService,
   Sale, // Now correctly imported
   SaleItem,
 } from './sale.service';
@@ -58,8 +60,8 @@ describe('SaleService', () => {
   let testEndDate: string;
 
   beforeEach(() => {
-    jest.spyOn(console, 'error').mockImplementation(() => {});
-    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'error').mockImplementation(() => { });
+    jest.spyOn(console, 'log').mockImplementation(() => { });
 
     mockPoolQuery = _getMockPoolQuery();
     mockPoolConnect = _getMockPoolConnect();
@@ -84,26 +86,24 @@ describe('SaleService', () => {
   });
 
   it('debería obtener todas las ventas', async () => {
-    const mockSalesData: Sale[] = [
+    const mockSalesDataRaw = [
       {
-        id: 1, sale_date: '2025-08-10', total_amount: 50, customer_name: 'Juan Perez', payment_method: 'cash',
-        sale_items: [{ id: 1, item_id: 1, price: 25, price_at_sale: 25, quantity: 1, item_name: 'Corte' }],
+        sale_id: 1, sale_date: '2025-08-10', total_amount: 50, customer_name: 'Juan Perez', payment_method: 'cash', reservation_id: null,
+        item_id: 1, sale_item_product_service_id: 1, service_id: 1, item_type: 'service', item_name: 'Corte', price: 25, price_at_sale: 25, quantity: 1
       },
       {
-        id: 2, sale_date: '2025-08-11', total_amount: 30, customer_name: 'Maria Lopez', payment_method: 'card',
-        sale_items: [{ id: 2, item_id: 2, price: 30, price_at_sale: 30, quantity: 1, item_name: 'Afeitado' }],
+        sale_id: 2, sale_date: '2025-08-11', total_amount: 30, customer_name: 'Maria Lopez', payment_method: 'card', reservation_id: null,
+        item_id: 2, sale_item_product_service_id: 2, service_id: 2, item_type: 'service', item_name: 'Afeitado', price: 30, price_at_sale: 30, quantity: 1
       },
     ];
 
-    // Mock for getAllSales (first query for sales)
-    mockPoolQuery.mockResolvedValueOnce({ rows: mockSalesData.map(s => ({ ...s, sale_items: undefined })) });
-    // Mock for getSaleItems (called for each sale)
-    mockPoolQuery.mockResolvedValueOnce({ rows: mockSalesData[0].sale_items });
-    mockPoolQuery.mockResolvedValueOnce({ rows: mockSalesData[1].sale_items });
+    mockPoolQuery.mockResolvedValueOnce({ rows: mockSalesDataRaw });
+    mockPoolQuery.mockResolvedValueOnce({ rows: [{ count: '2' }] }); // For total count query
 
-    const sales = await getAllSales();
+    const { sales, total } = await getAllSales(1, 10);
     expect(Array.isArray(sales)).toBe(true);
     expect(sales.length).toBe(2);
+    expect(total).toBe(2);
     expect(sales[0]).toHaveProperty('customer_name', 'Juan Perez');
     expect(sales[0].sale_items.length).toBe(1);
   });
@@ -126,8 +126,7 @@ describe('SaleService', () => {
     // Mock client.query calls in sequence for createSale
     mockClientQuery.mockResolvedValueOnce({ rows: [] }); // BEGIN
     mockClientQuery.mockResolvedValueOnce({ rows: [{ id: createdSaleId }] }); // INSERT into sales
-    mockClientQuery.mockResolvedValueOnce({ rows: [] }); // INSERT into sale_items (first item)
-    mockClientQuery.mockResolvedValueOnce({ rows: [] }); // INSERT into sale_items (second item)
+    mockClientQuery.mockResolvedValueOnce({ rows: [] }); // INSERT into sale_items
     mockClientQuery.mockResolvedValueOnce({ rows: [] }); // COMMIT
 
     (draftSaleService.deleteDraftSale as jest.Mock).mockResolvedValueOnce({ message: 'Draft sale deleted' });
@@ -141,12 +140,11 @@ describe('SaleService', () => {
       [newSale.sale_date, newSale.total_amount, newSale.customer_name, newSale.payment_method, newSale.reservation_id],
     );
     expect(mockClientQuery).toHaveBeenCalledWith(
-      'INSERT INTO sale_items (sale_id, service_id, item_type, item_name, price, price_at_sale, quantity) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-      [createdSaleId, newSale.sale_items[0].service_id, newSale.sale_items[0].item_type, newSale.sale_items[0].item_name, newSale.sale_items[0].price, newSale.sale_items[0].price_at_sale, newSale.sale_items[0].quantity],
-    );
-    expect(mockClientQuery).toHaveBeenCalledWith(
-      'INSERT INTO sale_items (sale_id, service_id, item_type, item_name, price, price_at_sale, quantity) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-      [createdSaleId, newSale.sale_items[1].service_id, newSale.sale_items[1].item_type, newSale.sale_items[1].item_name, newSale.sale_items[1].price, newSale.sale_items[1].price_at_sale, newSale.sale_items[1].quantity],
+      expect.stringContaining('INSERT INTO sale_items'),
+      [
+        createdSaleId, newSale.sale_items[0].service_id, newSale.sale_items[0].item_type, newSale.sale_items[0].item_name, newSale.sale_items[0].price, newSale.sale_items[0].price_at_sale, newSale.sale_items[0].quantity,
+        createdSaleId, newSale.sale_items[1].service_id, newSale.sale_items[1].item_type, newSale.sale_items[1].item_name, newSale.sale_items[1].price, newSale.sale_items[1].price_at_sale, newSale.sale_items[1].quantity,
+      ],
     );
     expect(draftSaleService.deleteDraftSale).toHaveBeenCalledWith(newSale.reservation_id, expect.anything());
     expect(mockClientQuery).toHaveBeenCalledWith('COMMIT');
@@ -179,8 +177,8 @@ describe('SaleService', () => {
       id: 1, sale_date: '2025-08-10', total_amount: 50, customer_name: 'Juan Perez', payment_method: 'cash',
       sale_items: [{ id: 1, item_id: 1, price: 25, price_at_sale: 25, quantity: 1, item_name: 'Corte' }],
     };
-    mockPoolQuery.mockResolvedValueOnce({ rows: [mockSaleData] }); // For getSaleById
-    mockPoolQuery.mockResolvedValueOnce({ rows: mockSaleData.sale_items }); // For getSaleItems
+    mockPoolQuery.mockResolvedValueOnce({ rows: [mockSaleData] }); // First call for sale data
+    mockPoolQuery.mockResolvedValueOnce({ rows: mockSaleData.sale_items }); // Second call for sale items
 
     const sale = await getSaleById(1);
     expect(mockPoolQuery).toHaveBeenCalledWith('SELECT * FROM sales WHERE id = $1', [1]);
@@ -194,8 +192,8 @@ describe('SaleService', () => {
       id: 1, sale_date: '2025-08-10', total_amount: 50, customer_name: 'Juan Perez', payment_method: 'cash', reservation_id: 101,
       sale_items: [{ id: 1, item_id: 1, price: 25, price_at_sale: 25, quantity: 1, item_name: 'Corte' }],
     };
-    mockPoolQuery.mockResolvedValueOnce({ rows: [mockSaleData] }); // For getSaleByReservationId
-    mockPoolQuery.mockResolvedValueOnce({ rows: mockSaleData.sale_items }); // For getSaleItems
+    mockPoolQuery.mockResolvedValueOnce({ rows: [mockSaleData] }); // First call for sale data
+    mockPoolQuery.mockResolvedValueOnce({ rows: mockSaleData.sale_items }); // Second call for sale items
 
     const sale = await getSaleByReservationId(101);
     expect(mockPoolQuery).toHaveBeenCalledWith(expect.stringContaining('SELECT'), [101]);
@@ -204,9 +202,57 @@ describe('SaleService', () => {
     expect(sale?.sale_items.length).toBe(1);
   });
 
-  // The original test file had tests for getFilteredSales, getSalesSummaryByDateRange,
-  // getBarberSalesRanking, getTotalPaymentsToBarbers, getSalesSummaryByService,
-  // getSalesSummaryByPaymentMethod. These functions are not exported by sale.service.ts.
-  // I will skip these tests for now as they are not directly testable from the public API.
-  // If these functions are intended to be public, they need to be exported from sale.service.ts.
+  describe('getSalesSummaryByDateRange', () => {
+    it('debería obtener el resumen de ventas por rango de fechas', async () => {
+      mockPoolQuery.mockResolvedValueOnce({
+        rows: [
+          { date: '2025-08-10', total: '100' },
+          { date: '2025-08-11', total: '150' },
+        ]
+      });
+
+      const summary = await getSalesSummaryByDateRange(testStartDate, testEndDate);
+      expect(mockPoolQuery).toHaveBeenCalledWith(expect.stringContaining('SELECT'), [testStartDate, testEndDate]);
+      expect(Array.isArray(summary)).toBe(true);
+      expect(summary.length).toBe(2);
+      expect(summary[0]).toHaveProperty('date', '2025-08-10');
+      expect(summary[0]).toHaveProperty('total', 100);
+    });
+
+    it('debería manejar un rango de fechas sin ventas para el resumen', async () => {
+      mockPoolQuery.mockClear(); // Ensure clean mock for this test
+      mockPoolQuery.mockResolvedValueOnce({ rows: [] });
+
+      const summary = await getSalesSummaryByDateRange('2000-01-01', '2000-01-31');
+      expect(Array.isArray(summary)).toBe(true);
+      expect(summary.length).toBe(0);
+    });
+  });
+
+  describe('getSalesSummaryByService', () => {
+    it('debería obtener el resumen de ventas por servicio', async () => {
+      mockPoolQuery.mockResolvedValueOnce({
+        rows: [
+          { service_name: 'Corte', total_sales: '200' },
+          { service_name: 'Afeitado', total_sales: '100' },
+        ]
+      });
+
+      const summary = await getSalesSummaryByService(testStartDate, testEndDate);
+      expect(mockPoolQuery).toHaveBeenCalledWith(expect.stringContaining('SELECT'), [testStartDate, testEndDate]);
+      expect(Array.isArray(summary)).toBe(true);
+      expect(summary.length).toBe(2);
+      expect(summary[0]).toHaveProperty('service_name', 'Corte');
+      expect(summary[0]).toHaveProperty('total_sales', 200);
+    });
+
+    it('debería manejar un rango de fechas sin ventas por servicio', async () => {
+      mockPoolQuery.mockClear(); // Ensure clean mock for this test
+      mockPoolQuery.mockResolvedValueOnce({ rows: [] });
+
+      const summary = await getSalesSummaryByService('2000-01-01', '2000-01-31');
+      expect(Array.isArray(summary)).toBe(true);
+      expect(summary.length).toBe(0);
+    });
+  });
 });
