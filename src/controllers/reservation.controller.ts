@@ -9,13 +9,16 @@ import {
 } from '../services/reservation.service';
 
 export const getAllReservationsController = async (req: Request, res: Response): Promise<void> => {
-  const { startDate, endDate } = req.query;
+  const pageNumber = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 10;
+  const includeSaleDetails = req.query.includeSaleDetails === 'true';
   try {
-    const reservations = await getAllReservations(
-      startDate as string | undefined,
-      endDate as string | undefined,
+    const { reservations, total, page } = await getAllReservations(
+      pageNumber,
+      limit,
+      includeSaleDetails,
     );
-    res.json(reservations);
+    res.json({ reservations, page, total });
   } catch (error) {
     console.error('Error getting reservations:', error);
     res.status(500).json({ message: 'Error interno del servidor' });
@@ -56,7 +59,7 @@ export const updateReservationController = async (req: Request, res: Response): 
   const { id } = req.params;
   try {
     const updatedReservation = await updateReservation(Number(id), req.body);
-     if (!updatedReservation) {
+    if (!updatedReservation) {
       res.status(404).json({ message: 'Reservación no encontrada' });
       return;
     }
@@ -72,9 +75,9 @@ export const deleteReservationController = async (req: Request, res: Response): 
     const { id } = req.params;
     const result = await deleteReservation(Number(id));
     if ('error' in result) {
-        res.status(404).json(result);
+      res.status(404).json(result);
     } else {
-        res.status(200).json(result);
+      res.status(200).json(result);
     }
   } catch (error) {
     console.error('Error deleting reservation:', error);

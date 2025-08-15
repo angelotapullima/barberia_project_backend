@@ -38,39 +38,63 @@ export interface Reservation {
   created_at?: string;
   barber_name?: string;
   service_name?: string;
+  station_name?: string; // Added this line
   sale?: Sale;
 }
 
 export const getAllReservations = async (
-  startDate?: string,
-  endDate?: string,
-): Promise<Reservation[]> => {
+  page: number,
+  limit: number,
+  includeSaleDetails: boolean = false,
+): Promise<{ reservations: Reservation[]; total: number; page: number }> => {
+  const offset = (page - 1) * limit;
   let query = `
-    SELECT 
+    SELECT
         r.id, r.barber_id, b.name as barber_name,
-        r.station_id, r.client_name, r.client_phone, r.client_email,
+        r.station_id, st.name as station_name, r.client_name, r.client_phone, r.client_email,
         r.start_time, r.end_time, r.service_id, s.name as service_name,
-        r.status, r.notes, r.created_at,
+        r.status, r.notes, r.created_at
+  `;
+  const params: any[] = [];
+
+  let countQuery = `SELECT COUNT(*) FROM reservations r`;
+  const countParams: any[] = [];
+  let countParamIndex = 1;
+
+  if (includeSaleDetails) {
+    query += `,
         sale.id as sale_id, sale.total_amount as sale_total,
         sale.payment_method as sale_payment_method,
         si.id as sale_item_id, si.item_name as sale_item_name,
         si.price_at_sale as sale_item_price, si.quantity as sale_item_quantity
+    `;
+  }
+
+  query += `
     FROM reservations r
     JOIN barbers b ON r.barber_id = b.id
     JOIN services s ON r.service_id = s.id
+    LEFT JOIN stations st ON r.station_id = st.id
+  `;
+
+  if (includeSaleDetails) {
+    query += `
     LEFT JOIN sales sale ON r.id = sale.reservation_id
     LEFT JOIN sale_items si ON sale.id = si.sale_id
-  `;
-  const params: any[] = [];
-
-  if (startDate && endDate) {
-    query += ' WHERE r.start_time::date BETWEEN $1 AND $2';
-    params.push(startDate, endDate);
+    `;
   }
 
-  query += ' ORDER BY r.start_time DESC';
+  query += ` ORDER BY r.start_time DESC `;
+
+  query += ` LIMIT $1`;
+  params.push(limit);
+
+  query += ` OFFSET $2`;
+  params.push(offset);
 
   const { rows } = await pool.query(query, params);
+  const totalResult = await pool.query(countQuery, countParams);
+  const total = Number(totalResult.rows[0].count);
   const reservationsMap = new Map<number, Reservation>();
 
   for (const row of rows) {
@@ -80,6 +104,7 @@ export const getAllReservations = async (
         barber_id: row.barber_id,
         barber_name: row.barber_name,
         station_id: row.station_id,
+        station_name: row.station_name, // <--- Added this line
         client_name: row.client_name,
         client_phone: row.client_phone,
         client_email: row.client_email,
@@ -90,38 +115,38 @@ export const getAllReservations = async (
         status: row.status,
         notes: row.notes,
         created_at: row.created_at,
-        sale: row.sale_id
+        sale: includeSaleDetails && row.sale_id
           ? {
-              id: row.sale_id,
-              total_amount: row.sale_total,
-              payment_method: row.sale_payment_method,
-              sale_items: [],
-            }
+            id: row.sale_id,
+            total_amount: Number(row.sale_total),
+            payment_method: row.sale_payment_method,
+            sale_items: [],
+          }
           : undefined,
       });
     }
 
-    if (row.sale_id) {
+    if (includeSaleDetails && row.sale_id && row.sale_item_id) {
       const reservation = reservationsMap.get(row.id)!;
-      if (reservation.sale && row.sale_item_id) {
+      if (reservation.sale) {
         const existingItem = reservation.sale.sale_items.find(
           (item) => item.id === row.sale_item_id,
         );
         if (!existingItem) {
           reservation.sale.sale_items.push({
             id: row.sale_item_id,
-            item_id: row.sale_item_id, // This is actually the sale_item_id
+            item_id: row.sale_item_id,
             item_name: row.sale_item_name,
-            price: row.sale_item_price, // This is the price_at_sale
-            price_at_sale: row.sale_item_price,
-            quantity: row.sale_item_quantity,
+            price: Number(row.sale_item_price),
+            price_at_sale: Number(row.sale_item_price),
+            quantity: Number(row.sale_item_quantity),
           });
         }
       }
     }
   }
 
-  return Array.from(reservationsMap.values());
+  return { reservations: Array.from(reservationsMap.values()), total, page };
 };
 
 export const getReservationById = async (id: number): Promise<Reservation | null> => {
@@ -196,7 +221,7 @@ export const updateReservation = async (
 
   params.push(id);
   const sql = `UPDATE reservations SET ${fields.join(', ')}, updated_at = NOW() WHERE id = $${paramIndex} RETURNING *`;
-  
+
   const { rows } = await pool.query(sql, params);
   return rows[0] || null;
 };
@@ -241,7 +266,7 @@ export const completeReservationAndCreateSale = async (reservationId: number): P
       sale_date: saleDate,
       total_amount: totalAmount,
       customer_name: reservation.client_name,
-      payment_method: 'cash', 
+      payment_method: 'cash',
       reservation_id: reservation.id,
       sale_items: [
         {

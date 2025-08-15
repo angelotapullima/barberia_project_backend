@@ -40,9 +40,11 @@ export const getSalesSummaryByServiceController = async (req: Request, res: Resp
 
 export const getSalesController = async (req: Request, res: Response): Promise<void> => {
     try {
-        // En el futuro, se pueden añadir filtros aquí si es necesario
-        const sales = await getAllSales();
-        res.json(sales);
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 10;
+
+        const { sales, total } = await getAllSales(page, limit);
+        res.json({ sales, total, page, limit });
     } catch (error) {
         console.error('Error getting sales:', error);
         res.status(500).json({ message: 'Error interno del servidor' });
