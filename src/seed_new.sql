@@ -19,7 +19,9 @@ INSERT INTO users (name, email, password, role) VALUES
 ('Admin User', 'admin@example.com', '$2b$10$E.w2a/oG.Pz4.w/jKzE95uK.E5.f8rE6.yG.w/jKzE95uK.E5.f8', 'administrador'), -- password: adminpassword
 ('Cashier User', 'cashier@example.com', '$2b$10$E.w2a/oG.Pz4.w/jKzE95uK.E5.f8rE6.yG.w/jKzE95uK.E5.f8', 'cajero'), -- password: cashierpassword
 ('Barber User 1', 'barber1@example.com', '$2b$10$E.w2a/oG.Pz4.w/jKzE95uK.E5.f8rE6.yG.w/jKzE95uK.E5.f8', 'cajero'), -- password: cashierpassword
-('New Admin User', 'newadmin@example.com', '$2b$10$3J7J.VnJBCn6hqVsNi2b1.msw9CEJ0feAVy4T3s8whHrwgUPIzMGK', 'administrador'); -- password: newadminpassword
+('New Admin User', 'newadmin@example.com', '$2b$10$3J7J.VnJBCn6hqVsNi2b1.msw9CEJ0feAVy4T3s8whHrwgUPIzMGK', 'administrador'), -- password: newadminpassword
+('New Admin User 2', 'newadmin2@example.com', '$2b$10$aNSO.i..ZxdvMvkSJF7mj.ANDH4ss247fXKV4EHUp01utfoGNqyDq', 'administrador'), -- password: newadminpass
+('New Cashier User', 'newcashier@example.com', '$2b$10$wHI/RpHxsiCY8.r1gY.XdeZQxq2ROE8V5hXTbsALUAgZGD3BhdNTu', 'cajero'); -- password: newcashierpass
 
 -- Insert data for settings table
 INSERT INTO settings (setting_key, setting_value, description) VALUES
