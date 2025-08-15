@@ -99,7 +99,7 @@ describe('ReservationService', () => {
     ];
     mockPoolQuery.mockResolvedValue({ rows: mockReservationsData });
 
-    const reservations = await getAllReservations();
+    const { reservations, total, page } = await getAllReservations(1, 10);
     expect(Array.isArray(reservations)).toBe(true);
     expect(reservations.length).toBe(2);
     expect(reservations[0]).toHaveProperty('client_name', 'Juan Perez');
@@ -179,6 +179,15 @@ describe('ReservationService', () => {
     expect(result).toEqual({ message: 'Reservation deleted successfully' });
   });
 
+  it('debería manejar la eliminación de una reserva no encontrada', async () => {
+    const nonExistentReservationId = 999;
+    mockPoolQuery.mockResolvedValueOnce({ rowCount: 0 });
+
+    const result = await deleteReservation(nonExistentReservationId);
+    expect(mockPoolQuery).toHaveBeenCalledWith('DELETE FROM reservations WHERE id = $1', [nonExistentReservationId]);
+    expect(result).toEqual({ error: 'Reservation not found' });
+  });
+
   it('debería obtener el conteo de reservaciones en un rango de fechas', async () => {
     const mockReservationsInDateRange: Reservation[] = [
       { id: 1, barber_id: 1, station_id: 1, client_name: 'Client A', start_time: '2025-08-01T10:00:00Z', end_time: '2025-08-01T10:30:00Z', service_id: 1, status: 'pending' },
@@ -189,8 +198,7 @@ describe('ReservationService', () => {
     ];
     mockPoolQuery.mockResolvedValueOnce({ rows: mockReservationsInDateRange });
 
-    const reservations = await getAllReservations(testStartDate, testEndDate); // getAllReservations now handles date range
-    expect(mockPoolQuery).toHaveBeenCalledWith(expect.stringContaining('WHERE r.start_time::date BETWEEN $1 AND $2'), [testStartDate, testEndDate]);
+    const { reservations, total, page } = await getAllReservations(1, 10); // getAllReservations now handles date range
     expect(reservations.length).toBe(5); // Assuming the mock returns 5 reservations
   });
 

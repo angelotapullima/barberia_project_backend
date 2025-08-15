@@ -139,4 +139,22 @@ describe('BarberService', () => {
     expect(mockPoolQuery).toHaveBeenCalledWith('DELETE FROM barbers WHERE id = $1', [nonExistentBarberId]);
     expect(result).toEqual({ message: 'Barber not found' });
   });
+
+  it('debería obtener la disponibilidad del barbero', async () => {
+    const barberId = 1;
+    const date = '2025-08-14';
+    const mockAvailability = [
+      { start_time: '2025-08-14T10:00:00Z', end_time: '2025-08-14T11:00:00Z' },
+      { start_time: '2025-08-14T14:00:00Z', end_time: '2025-08-14T15:00:00Z' },
+    ];
+    mockPoolQuery.mockResolvedValueOnce({ rows: mockAvailability });
+
+    const availability = await barberService.getBarberAvailability(barberId, date);
+
+    expect(mockPoolQuery).toHaveBeenCalledWith(
+      '\n    SELECT start_time, end_time\n    FROM reservations\n    WHERE barber_id = $1 AND DATE(start_time) = $2\n  ',
+      [barberId, date]
+    );
+    expect(availability).toEqual(mockAvailability);
+  });
 });

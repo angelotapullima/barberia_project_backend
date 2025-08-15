@@ -118,20 +118,19 @@ export const getInventoryReportSummary = async (): Promise<{
   lowStockCount: number;
   totalInventoryValue: number;
 }> => {
-  const totalProductsResult = await pool.query(
-    "SELECT COUNT(*) as count FROM services WHERE type = 'product'"
-  );
-  const totalProducts = Number(totalProductsResult.rows[0].count);
+  const result = await pool.query(`
+    SELECT
+      COUNT(*) FILTER (WHERE type = 'product') AS total_products,
+      COUNT(*) FILTER (WHERE type = 'product' AND stock_quantity <= min_stock_level) AS low_stock_count,
+      COALESCE(SUM(CASE WHEN type = 'product' THEN stock_quantity * price ELSE 0 END), 0) AS total_inventory_value
+    FROM services;
+  `);
 
-  const lowStockCountResult = await pool.query(
-    "SELECT COUNT(*) as count FROM services WHERE type = 'product' AND stock_quantity <= min_stock_level"
-  );
-  const lowStockCount = Number(lowStockCountResult.rows[0].count);
+  const row = result.rows[0];
 
-  const totalInventoryValueResult = await pool.query(
-    "SELECT SUM(stock_quantity * price) as value FROM services WHERE type = 'product'"
-  );
-  const totalInventoryValue = Number(totalInventoryValueResult.rows[0].value) || 0;
-
-  return { totalProducts, lowStockCount, totalInventoryValue };
+  return {
+    totalProducts: Number(row.total_products),
+    lowStockCount: Number(row.low_stock_count),
+    totalInventoryValue: Number(row.total_inventory_value),
+  };
 };

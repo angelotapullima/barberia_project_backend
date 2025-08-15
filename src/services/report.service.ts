@@ -70,13 +70,14 @@ export const getServicesProductsSales = async (
   const { rows } = await pool.query(
     `
     SELECT
+      DATE(sa.sale_date) as date,
       si.item_type as type,
       SUM(si.price_at_sale * si.quantity) as total_sales_by_type
     FROM sale_items si
     JOIN sales sa ON si.sale_id = sa.id
     WHERE sa.sale_date::date BETWEEN $1 AND $2
-    GROUP BY si.item_type
-    ORDER BY type;
+    GROUP BY DATE(sa.sale_date), si.item_type
+    ORDER BY date, type;
   `,
     [startDate, endDate],
   );
@@ -167,17 +168,16 @@ export const getStationUsage = async (startDate: string, endDate: string): Promi
     `
     SELECT
       st.name AS station_name,
-      COUNT(s.id)::integer AS total_sales,
-      COALESCE(SUM(s.total_amount), 0)::real AS total_revenue
+      COUNT(r.id)::integer AS completed_reservations_count
     FROM stations st
     LEFT JOIN reservations r ON st.id = r.station_id
-    LEFT JOIN sales s ON r.id = s.reservation_id AND s.sale_date::date BETWEEN $1 AND $2
+    WHERE r.status = 'completed' AND r.start_time::date BETWEEN $1 AND $2
     GROUP BY st.id, st.name
     ORDER BY st.name ASC;
   `,
     [startDate, endDate],
   );
-  return rows.map(r => ({...r, total_sales: Number(r.total_sales), total_revenue: Number(r.total_revenue)}));
+  return rows.map(r => ({...r, completed_reservations_count: Number(r.completed_reservations_count)}));
 };
 
 export const getCustomerFrequency = async (startDate: string, endDate: string): Promise<any[]> => {

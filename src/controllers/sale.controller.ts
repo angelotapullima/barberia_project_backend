@@ -4,13 +4,47 @@ import {
   getSaleById,
   createSale,
   getSaleByReservationId,
+  getSalesSummaryByDateRange, // Import the new service function
+  getSalesSummaryByService,   // Import the new service function
 } from '../services/sale.service';
+
+export const getSalesSummaryController = async (req: Request, res: Response): Promise<void> => {
+  const { startDate, endDate } = req.query;
+  if (!startDate || !endDate) {
+    res.status(400).json({ message: 'Fechas de inicio y fin son requeridas.' });
+    return;
+  }
+  try {
+    const summary = await getSalesSummaryByDateRange(String(startDate), String(endDate));
+    res.json(summary);
+  } catch (error) {
+    console.error('Error getting sale summary:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
+};
+
+export const getSalesSummaryByServiceController = async (req: Request, res: Response): Promise<void> => {
+  const { startDate, endDate } = req.query;
+  if (!startDate || !endDate) {
+    res.status(400).json({ message: 'Fechas de inicio y fin son requeridas.' });
+    return;
+  }
+  try {
+    const summary = await getSalesSummaryByService(String(startDate), String(endDate));
+    res.json(summary);
+  } catch (error) {
+    console.error('Error getting sale summary by service:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
+};
 
 export const getSalesController = async (req: Request, res: Response): Promise<void> => {
     try {
-        // En el futuro, se pueden añadir filtros aquí si es necesario
-        const sales = await getAllSales();
-        res.json(sales);
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 10;
+
+        const { sales, total } = await getAllSales(page, limit);
+        res.json({ sales, total, page, limit });
     } catch (error) {
         console.error('Error getting sales:', error);
         res.status(500).json({ message: 'Error interno del servidor' });
@@ -19,8 +53,15 @@ export const getSalesController = async (req: Request, res: Response): Promise<v
 
 export const getSaleByIdController = async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
+    const saleId = Number(id);
+
+    if (isNaN(saleId)) {
+        res.status(400).json({ message: 'ID de venta inválido.' });
+        return;
+    }
+
     try {
-        const sale = await getSaleById(Number(id));
+        const sale = await getSaleById(saleId);
         if (sale) {
             res.json(sale);
         } else {

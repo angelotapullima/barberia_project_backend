@@ -55,8 +55,8 @@ describe('ReportService', () => {
 
   it('debería calcular correctamente la utilización de estaciones', async () => {
     const mockStationUsageData = [
-      { station_name: 'Estación Central', total_sales: 5, total_revenue: 250 },
-      { station_name: 'Estación Norte', total_sales: 3, total_revenue: 150 },
+      { station_name: 'Estación Central', completed_reservations_count: 5 },
+      { station_name: 'Estación Norte', completed_reservations_count: 3 },
     ];
     mockPoolQuery.mockResolvedValue({ rows: mockStationUsageData });
 
@@ -66,7 +66,7 @@ describe('ReportService', () => {
     expect(Array.isArray(stationUsage)).toBe(true);
     expect(stationUsage.length).toBe(2);
     expect(stationUsage[0].station_name).toBe('Estación Central');
-    expect(stationUsage[0].total_sales).toBe(5);
+    expect(stationUsage[0].completed_reservations_count).toBe(5);
   });
 
   it('debería calcular correctamente la frecuencia de clientes', async () => {
@@ -170,7 +170,7 @@ describe('ReportService', () => {
   describe('getComprehensiveSales', () => {
     it('debería obtener todas las ventas sin filtros', async () => {
       const mockSalesData = [
-        { sale_id: 1, sale_date: new Date('2025-08-10'), total_amount: 50, customer_name: 'Cliente 1', payment_method: 'cash', items_sold: 'Corte (25), Gel (25)' },
+        { sale_id: 1, sale_date: '2025-08-10', total_amount: 50, customer_name: 'Cliente 1', payment_method: 'cash', items_sold: 'Corte (25), Gel (25)' },
       ];
       mockPoolQuery.mockResolvedValue({ rows: mockSalesData });
 

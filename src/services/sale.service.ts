@@ -37,18 +37,65 @@ const getSaleItems = async (saleId: number, client: Pool | PoolClient = pool): P
 };
 
 // --- PUBLIC API ---
-export const getAllSales = async (): Promise<Sale[]> => {
-  const { rows: sales } = await pool.query(`
-    SELECT 
-        s.id, s.sale_date, s.total_amount, s.customer_name, s.payment_method, s.reservation_id
-    FROM sales s
-    ORDER BY s.sale_date DESC
-  `);
+export const getAllSales = async (page: number, limit: number): Promise<{ sales: Sale[]; total: number }> => {
+  const offset = (page - 1) * limit;
 
-  for (const sale of sales) {
-    sale.sale_items = await getSaleItems(sale.id!);
+  const { rows } = await pool.query(`
+    SELECT
+        s.id AS sale_id,
+        s.sale_date,
+        s.total_amount,
+        s.customer_name,
+        s.payment_method,
+        s.reservation_id,
+        si.id AS item_id,
+        si.service_id AS sale_item_product_service_id,
+        si.service_id,
+        si.item_type,
+        si.item_name,
+        si.price,
+        si.price_at_sale,
+        si.quantity
+    FROM sales s
+    LEFT JOIN sale_items si ON s.id = si.sale_id
+    ORDER BY s.sale_date DESC, si.id ASC
+    LIMIT $1 OFFSET $2
+  `, [limit, offset]);
+
+  const salesMap = new Map<number, Sale>();
+
+  for (const row of rows) {
+    if (!salesMap.has(row.sale_id)) {
+      salesMap.set(row.sale_id, {
+        id: row.sale_id,
+        sale_date: row.sale_date,
+        total_amount: Number(row.total_amount),
+        customer_name: row.customer_name,
+        payment_method: row.payment_method,
+        reservation_id: row.reservation_id,
+        sale_items: [],
+      });
+    }
+
+    if (row.item_id) { // Only add sale item if it exists (for sales without items)
+      const sale = salesMap.get(row.sale_id)!;
+      sale.sale_items.push({
+        id: row.item_id,
+        item_id: row.sale_item_product_service_id,
+        service_id: row.service_id,
+        item_type: row.item_type,
+        item_name: row.item_name,
+        price: Number(row.price),
+        price_at_sale: Number(row.price_at_sale),
+        quantity: Number(row.quantity),
+      });
+    }
   }
-  return sales;
+
+  const totalResult = await pool.query('SELECT COUNT(*) FROM sales');
+  const total = Number(totalResult.rows[0].count);
+
+  return { sales: Array.from(salesMap.values()), total };
 };
 
 export const getSaleById = async (id: number): Promise<Sale | null> => {
@@ -59,6 +106,39 @@ export const getSaleById = async (id: number): Promise<Sale | null> => {
     }
     return sale || null;
 }
+
+export const getSalesSummaryByDateRange = async (startDate: string, endDate: string): Promise<any[]> => {
+  const { rows } = await pool.query(
+    `
+    SELECT
+      DATE(sale_date) as date,
+      SUM(total_amount) as total
+    FROM sales
+    WHERE sale_date::date BETWEEN $1 AND $2
+    GROUP BY DATE(sale_date)
+    ORDER BY date ASC;
+    `,
+    [startDate, endDate]
+  );
+  return rows.map(row => ({ ...row, total: Number(row.total) }));
+};
+
+export const getSalesSummaryByService = async (startDate: string, endDate: string): Promise<any[]> => {
+  const { rows } = await pool.query(
+    `
+    SELECT
+      si.item_name as service_name,
+      SUM(si.price_at_sale * si.quantity) as total_sales
+    FROM sale_items si
+    JOIN sales s ON si.sale_id = s.id
+    WHERE si.item_type = 'service' AND s.sale_date::date BETWEEN $1 AND $2
+    GROUP BY si.item_name
+    ORDER BY total_sales DESC;
+    `,
+    [startDate, endDate]
+  );
+  return rows.map(row => ({ ...row, total_sales: Number(row.total_sales) }));
+};
 
 export const createSale = async (sale: Omit<Sale, 'id'>, existingClient?: PoolClient): Promise<Sale> => {
   const {
@@ -94,18 +174,25 @@ export const createSale = async (sale: Omit<Sale, 'id'>, existingClient?: PoolCl
     );
     const saleId = saleResult.rows[0].id;
 
-    for (const item of sale_items) {
+    if (sale_items.length > 0) {
+      const itemValues = sale_items.map((item, index) => {
+        const offset = index * 7; // 7 columns per item
+        return `(${offset + 1}, ${offset + 2}, ${offset + 3}, ${offset + 4}, ${offset + 5}, ${offset + 6}, ${offset + 7})`;
+      }).join(', ');
+
+      const itemParams = sale_items.flatMap(item => [
+        saleId,
+        item.service_id,
+        item.item_type,
+        item.item_name,
+        item.price,
+        item.price_at_sale,
+        item.quantity,
+      ]);
+
       await client.query(
-        'INSERT INTO sale_items (sale_id, service_id, item_type, item_name, price, price_at_sale, quantity) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-        [
-          saleId,
-          item.service_id,
-          item.item_type,
-          item.item_name,
-          item.price,
-          item.price_at_sale,
-          item.quantity,
-        ],
+        `INSERT INTO sale_items (sale_id, service_id, item_type, item_name, price, price_at_sale, quantity) VALUES ${itemValues}`,
+        itemParams,
       );
     }
 

@@ -246,12 +246,7 @@ describe('ServiceService', () => {
   });
 
   it('debería obtener el resumen del informe de inventario', async () => {
-    // Mock for totalProducts
-    mockPoolQuery.mockResolvedValueOnce({ rows: [{ count: '2' }] });
-    // Mock for lowStockCount
-    mockPoolQuery.mockResolvedValueOnce({ rows: [{ count: '1' }] });
-    // Mock for totalInventoryValue
-    mockPoolQuery.mockResolvedValueOnce({ rows: [{ value: '1000' }] });
+    mockPoolQuery.mockResolvedValueOnce({ rows: [{ total_products: '2', low_stock_count: '1', total_inventory_value: '1000' }] });
 
     const summary = await getInventoryReportSummary();
     expect(summary).toEqual({
