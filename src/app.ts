@@ -19,7 +19,16 @@ import barberCommissionsRoutes from './routes/barberCommissions.routes'; // Impo
 const app = express();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: function (origin, callback) {
+    console.log('Origin received:', origin); // Added for debugging
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
 app.use(express.json());
 
 // Basic route to confirm server is running
