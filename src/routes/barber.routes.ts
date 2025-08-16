@@ -7,6 +7,7 @@ import {
   deleteBarberController,
   createBarberAdvanceController,
 } from '../controllers/barber.controller';
+import { authenticateToken } from '../middleware/auth.middleware'; // Import the middleware
 
 const router = Router();
 
@@ -14,11 +15,11 @@ const router = Router();
 // para evitar que 'availability' sea tratado como un id.
 
 
-router.get('/', getAllBarbersController);
-router.get('/:id', getBarberByIdController);
-router.post('/', createBarberController);
-router.put('/:id', updateBarberController);
-router.delete('/:id', deleteBarberController);
-router.post('/:id/advances', createBarberAdvanceController);
+router.get('/', authenticateToken, getAllBarbersController);
+router.get('/:id', authenticateToken, getBarberByIdController);
+router.post('/', authenticateToken, createBarberController);
+router.put('/:id', authenticateToken, updateBarberController);
+router.delete('/:id', authenticateToken, deleteBarberController);
+router.post('/:id/advances', authenticateToken, createBarberAdvanceController);
 
 export default router;
