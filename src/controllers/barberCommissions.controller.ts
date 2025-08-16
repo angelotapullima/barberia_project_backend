@@ -1,21 +1,5 @@
 import { Request, Response } from 'express';
 import * as barberCommissionsService from '../services/barberCommissions.service';
-import dayjs from 'dayjs';
-
-export const calculateMonthlyCommissionsController = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { year, month } = req.body;
-    if (!year || !month) {
-      res.status(400).json({ message: 'Year and month are required.' });
-      return;
-    }
-    await barberCommissionsService.calculateMonthlyCommissions(year, month);
-    res.status(200).json({ message: 'Monthly commissions calculated successfully.' });
-  } catch (error) {
-    console.error('Error calculating monthly commissions:', error);
-    res.status(500).json({ message: 'Error calculating monthly commissions', error });
-  }
-};
 
 export const getMonthlyBarberCommissionsController = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -30,6 +14,29 @@ export const getMonthlyBarberCommissionsController = async (req: Request, res: R
   } catch (error) {
     console.error('Error fetching monthly barber commissions:', error);
     res.status(500).json({ message: 'Error fetching monthly barber commissions', error });
+  }
+};
+
+export const createAndFinalizePaymentController = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { barberId, year, month } = req.body;
+    if (!barberId || !year || !month) {
+      res.status(400).json({ message: 'barberId, year, and month are required.' });
+      return;
+    }
+    const newPayment = await barberCommissionsService.createAndFinalizePayment(barberId, year, month);
+    res.status(201).json({ message: 'Payment created and finalized successfully.', payment: newPayment });
+  } catch (error) {
+    const err = error as Error;
+    console.error('Error creating and finalizing payment:', err.message);
+
+    if (err.message.includes('already been registered')) {
+      res.status(409).json({ message: err.message }); // 409 Conflict
+    } else if (err.message.includes('period has not ended')) {
+      res.status(403).json({ message: err.message }); // 403 Forbidden
+    } else {
+      res.status(500).json({ message: 'Error creating and finalizing payment', error: err.message });
+    }
   }
 };
 
@@ -64,34 +71,5 @@ export const getBarberAdvancesForMonthController = async (req: Request, res: Res
   } catch (error) {
     console.error('Error fetching barber advances for month:', error);
     res.status(500).json({ message: 'Error fetching barber advances for month', error });
-  }
-};
-
-export const finalizeBarberPaymentController = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const commissionId = parseInt(req.params.commissionId as string, 10);
-    if (!commissionId) {
-      res.status(400).json({ message: 'Commission ID is required.' });
-      return;
-    }
-    const finalizedPayment = await barberCommissionsService.finalizeBarberPayment(commissionId);
-    if (finalizedPayment) {
-      res.status(200).json({ message: 'Payment finalized successfully.', payment: finalizedPayment });
-    } else {
-      res.status(404).json({ message: 'Commission record not found.' });
-    }
-  } catch (error) {
-    console.error('Error finalizing barber payment:', error);
-    res.status(500).json({ message: 'Error finalizing barber payment', error });
-  }
-};
-
-// Keep the old one for now, will be removed later
-export const getBarberCommissionsController = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const commissions = await barberCommissionsService.getBarberCommissions();
-    res.status(200).json(commissions);
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching barber commissions', error });
   }
 };

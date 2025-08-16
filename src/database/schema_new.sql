@@ -882,62 +882,6 @@ INSERT INTO inventory_movements (product_id, movement_type, quantity, reference_
 (405, 'in', 25, 'purchase', 'Nueva colección - Gorras Barbería');
 
 -- =====================================================================================================================
--- GENERAR COMISIONES HISTÓRICAS (SOLO PARA MESES PASADOS)
--- =====================================================================================================================
-
-DO $$
-DECLARE
-    barber_rec RECORD;
-    month_start DATE;
-    month_end DATE;
-    services_total_val REAL;
-    commission_val REAL;
-    total_payment_val REAL;
-    advance_total REAL;
-BEGIN
-    -- Generar comisiones para los últimos 3 meses (completos)
-    FOR month_offset IN 1..3 LOOP
-        month_start := DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month' * month_offset);
-        month_end := (month_start + INTERVAL '1 month' - INTERVAL '1 day')::DATE;
-        
-        FOR barber_rec IN SELECT * FROM barbers WHERE is_active = true LOOP
-            -- Calcular total de servicios del barbero en el período
-            SELECT COALESCE(SUM(service_amount), 0) INTO services_total_val
-            FROM sales 
-            WHERE barber_id = barber_rec.id 
-            AND sale_date >= month_start 
-            AND sale_date <= month_end + INTERVAL '1 day';
-            
-            -- Calcular comisión según reglas de negocio
-            commission_val := CASE
-                WHEN services_total_val > (barber_rec.base_salary * 2) THEN services_total_val / 2
-                ELSE barber_rec.base_salary
-            END;
-            
-            -- Calcular adelantos del período
-            SELECT COALESCE(SUM(amount), 0) INTO advance_total
-            FROM barber_advances
-            WHERE barber_id = barber_rec.id 
-            AND date >= month_start 
-            AND date <= month_end;
-            
-            total_payment_val := commission_val - advance_total;
-            
-            -- Solo insertar si hay actividad o comisión base
-            IF services_total_val > 0 OR commission_val > 0 THEN
-                INSERT INTO barber_commissions (
-                    barber_id, period_start, period_end, base_salary, 
-                    services_total, commission_amount, total_payment, status
-                ) VALUES (
-                    barber_rec.id, month_start, month_end, barber_rec.base_salary,
-                    services_total_val, commission_val, total_payment_val, 'paid'
-                );
-            END IF;
-        END LOOP;
-    END LOOP;
-END $$;
-
--- =====================================================================================================================
 -- LIMPIAR FUNCIONES AUXILIARES
 -- =====================================================================================================================
 
@@ -1036,13 +980,6 @@ SELECT '💼 Valor total inventario:',
 FROM products 
 WHERE is_active = true;
 
--- Comisiones
-SELECT '' AS categoria, '' AS detalle, '' AS cantidad;
-SELECT 'COMISIONES HISTÓRICAS:' AS categoria, '' AS detalle, '' AS cantidad;
-SELECT '🏆 Períodos calculados:', COUNT(*)::TEXT, 'períodos' AS cantidad FROM barber_commissions;
-SELECT '💸 Total comisiones pagadas:', 
-    'S/ ' || COALESCE(SUM(commission_amount), 0)::NUMERIC(10,2)::TEXT, 'soles' AS cantidad 
-FROM barber_commissions WHERE status = 'paid';
 
 SELECT '========================================' AS resultado;
 SELECT '🎉 SISTEMA LISTO PARA USAR' AS resultado;
@@ -1050,6 +987,6 @@ SELECT '========================================' AS resultado;
 SELECT 'ℹ️  Usuarios de prueba creados con contraseñas hash' AS resultado;
 SELECT 'ℹ️  Datos distribuidos en 3 meses + semana actual + próxima semana' AS resultado;
 SELECT 'ℹ️  Inventario configurado con stock realista' AS resultado;
-SELECT 'ℹ️  Comisiones históricas calculadas automáticamente' AS resultado;
+
 SELECT 'ℹ️  Triggers de inventario activados' AS resultado;
 SELECT '========================================' AS resultado;

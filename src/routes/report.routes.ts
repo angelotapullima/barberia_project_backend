@@ -5,9 +5,7 @@ import {
   getStationUsageReportController,
   getCustomerFrequencyReportController,
   getPeakHoursReportController,
-  getBarberPaymentsReportController,
   getDetailedBarberServiceSalesReportController,
-  generateBarberPaymentsController,
 } from '../controllers/report.controller';
 
 const router = Router();
@@ -17,8 +15,6 @@ router.get('/services-products-sales', getServicesProductsSalesReportController)
 router.get('/station-usage', getStationUsageReportController);
 router.get('/customer-frequency', getCustomerFrequencyReportController);
 router.get('/peak-hours', getPeakHoursReportController);
-router.get('/barber-payments', getBarberPaymentsReportController);
-router.post('/barber-payments/generate', generateBarberPaymentsController);
 router.get('/detailed-barber-service-sales', getDetailedBarberServiceSalesReportController);
 
 export default router;
