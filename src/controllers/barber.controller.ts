@@ -60,3 +60,14 @@ export const deleteBarberController = async (req: Request, res: Response): Promi
     res.status(500).json({ message: 'Error deactivating barber', error });
   }
 };
+
+export const createBarberAdvanceController = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const barberId = parseInt(req.params.id, 10);
+    const { amount, date, notes } = req.body;
+    const newAdvance = await barberService.createBarberAdvance(barberId, amount, date, notes);
+    res.status(201).json(newAdvance);
+  } catch (error) {
+    res.status(500).json({ message: 'Error creating barber advance', error });
+  }
+};

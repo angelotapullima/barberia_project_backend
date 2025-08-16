@@ -52,8 +52,18 @@ export const completeReservationController = async (req: Request, res: Response)
 // I will replace the whole file content with the new and old (to be updated later) content.
 
 export const getAllReservationsController = async (req: Request, res: Response): Promise<void> => {
-  // This function needs to be updated to use the new service logic
-  res.status(511).json({ message: 'Not yet implemented' });
+  try {
+    const page = parseInt(req.query.page as string, 10) || 1;
+    const limit = parseInt(req.query.limit as string, 10) || 10;
+    const includeSaleDetails = req.query.includeSaleDetails === 'true';
+
+    const result = await reservationService.getAllReservations(page, limit, includeSaleDetails);
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('Error getting all reservations:', error);
+    res.status(500).json({ message: 'Error getting all reservations' });
+  }
 };
 
 export const getReservationByIdController = async (req: Request, res: Response): Promise<void> => {
@@ -104,5 +114,15 @@ export const getCalendarViewDataController = async (req: Request, res: Response)
     res.status(200).json(data);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching calendar view data', error });
+  }
+};
+
+export const fixReservationEndTimesController = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { fixedCount } = await reservationService.fixReservationEndTimes();
+    res.status(200).json({ message: `Fixed ${fixedCount} reservation end times.`, fixedCount });
+  } catch (error) {
+    console.error('Error in fixReservationEndTimesController:', error);
+    res.status(500).json({ message: 'Error fixing reservation end times' });
   }
 };

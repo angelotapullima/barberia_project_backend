@@ -15,6 +15,7 @@ import dashboardRoutes from './routes/dashboard.routes'; // Import dashboard rou
 import posRoutes from './routes/pos.routes'; // Import POS routes
 import inventoryRoutes from './routes/inventory.routes'; // Import inventory routes
 import barberCommissionsRoutes from './routes/barberCommissions.routes'; // Import barber commissions routes
+import paymentRoutes from './routes/payment.routes';
 
 const app = express();
 
@@ -54,6 +55,7 @@ pool.connect()
     app.use('/api/pos', posRoutes); // Use POS routes
     app.use('/api/inventory', inventoryRoutes); // Use inventory routes
     app.use('/api/barber-commissions', barberCommissionsRoutes); // Use barber commissions routes
+    app.use('/api/payments', paymentRoutes);
     
   })
   .catch((err: any) => {

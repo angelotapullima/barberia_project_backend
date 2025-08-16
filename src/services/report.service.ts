@@ -63,28 +63,7 @@ export const getServicesProductsSales = async (
   return rows.map(r => ({...r, service_total: Number(r.service_total), product_total: Number(r.product_total)}));
 };
 
-export const getBarberPayments = async (
-  startDate: string,
-  endDate: string
-): Promise<any[]> => {
-    // The view barber_sales_summary already contains all the logic.
-    // The date filter in the view is for the last 30 days by default, 
-    // but for a specific report, we should filter explicitly.
-    const query = `
-        SELECT 
-            barber_id, 
-            barber_name, 
-            base_salary, 
-            total_services, 
-            commission_payment as payment
-        FROM barber_sales_summary
-        -- Note: The view needs to be modified to accept date ranges or we filter here.
-        -- For now, we assume the view is for the current month as per its definition.
-    `;
-    // In a real implementation, you'd pass startDate and endDate to the view or filter here.
-    const { rows } = await pool.query(query);
-    return rows;
-};
+
 
 export const getDetailedBarberServiceSales = async (filters: {
   barberId?: number;

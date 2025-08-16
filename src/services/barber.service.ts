@@ -55,3 +55,11 @@ export const getBarberAvailability = async (barberId: number, date: string) => {
   const result = await pool.query(query, [barberId, date]);
   return result.rows;
 };
+
+export const createBarberAdvance = async (barberId: number, amount: number, date: string, notes: string): Promise<any> => {
+  const result = await pool.query(
+    'INSERT INTO barber_advances (barber_id, amount, date, notes) VALUES ($1, $2, $3, $4) RETURNING *',
+    [barberId, amount, date, notes]
+  );
+  return result.rows[0];
+};
