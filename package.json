@@ -8,6 +8,7 @@
     "dev": "nodemon --watch src --exec ts-node src/server.ts",
     "test": "jest",
     "test:coverage": "cross-env DOTENV_CONFIG_PATH=.env.test jest --coverage --verbose --forceExit --setupFiles=dotenv/config",
+    "test:coverage:macos": "DOTENV_CONFIG_PATH=.env.test jest --coverage --verbose --forceExit --setupFiles=dotenv/config",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write ."

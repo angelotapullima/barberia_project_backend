@@ -101,10 +101,18 @@ describe('SaleService', () => {
     it('should cancel a sale', async () => {
       const sale = { reservation_id: 1 };
 
-      mockClientQuery.mockResolvedValueOnce({ rows: [sale], rowCount: 1 }); // SELECT sale
-      mockClientQuery.mockResolvedValueOnce({ rowCount: 1 }); // DELETE sale_items
-      mockClientQuery.mockResolvedValueOnce({ rowCount: 1 }); // DELETE sale
-      mockClientQuery.mockResolvedValueOnce({ rowCount: 1 }); // UPDATE reservation
+      mockClientQuery.mockImplementation((query: string, params: any[]) => {
+        if (query.includes('SELECT reservation_id FROM sales')) {
+          return Promise.resolve({ rows: [sale], rowCount: 1 });
+        } else if (query.includes('DELETE FROM sale_items')) {
+          return Promise.resolve({ rowCount: 1 });
+        } else if (query.includes('DELETE FROM sales')) {
+          return Promise.resolve({ rowCount: 1 });
+        } else if (query.includes('UPDATE reservations')) {
+          return Promise.resolve({ rowCount: 1 });
+        }
+        return Promise.resolve({ rows: [] }); // Default for other queries
+      });
 
       const result = await cancelSale(1);
 
