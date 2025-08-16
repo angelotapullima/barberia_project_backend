@@ -23,10 +23,9 @@ const app = express();
 // CORS configuration
 
 app.use(cors({
-  origin: 'https://bajadita-barbershop.vercel.app/',
+  origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
