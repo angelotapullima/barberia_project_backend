@@ -112,14 +112,24 @@ describe('ReservationService', () => {
       const sale = { id: 1 };
       const serviceInfo = { name: 'Test Service' };
 
-      mockClientQuery.mockResolvedValueOnce({ rows: [reservation], rowCount: 1 }); // SELECT reservation
-      mockClientQuery.mockResolvedValueOnce({ rows: products }); // SELECT products
-      mockClientQuery.mockResolvedValueOnce({ rows: [sale] }); // INSERT sale
-      mockClientQuery.mockResolvedValueOnce({ rows: [serviceInfo] }); // SELECT service info
-      mockClientQuery.mockResolvedValueOnce({ rows: [] }); // INSERT sale_items (service)
-      mockClientQuery.mockResolvedValueOnce({ rows: [{id: 1, name: 'Test Product'}] }); // SELECT product info
-      mockClientQuery.mockResolvedValueOnce({ rows: [] }); // INSERT sale_items (product)
-      mockClientQuery.mockResolvedValueOnce({ rowCount: 1 }); // UPDATE reservation
+      mockClientQuery.mockImplementation((query: string, params: any[]) => {
+        if (query.includes('SELECT * FROM reservations WHERE id = $1 FOR UPDATE')) {
+          return Promise.resolve({ rows: [reservation], rowCount: 1 });
+        } else if (query.includes('SELECT * FROM reservation_products WHERE reservation_id = $1')) {
+          return Promise.resolve({ rows: products });
+        } else if (query.includes('INSERT INTO sales')) {
+          return Promise.resolve({ rows: [sale] });
+        } else if (query.includes('SELECT name FROM services WHERE id = $1')) {
+          return Promise.resolve({ rows: [serviceInfo] });
+        } else if (query.includes('INSERT INTO sale_items')) {
+          return Promise.resolve({ rows: [] });
+        } else if (query.includes('SELECT id, name FROM products WHERE id = ANY($1::int[])')) {
+          return Promise.resolve({ rows: [{id: 1, name: 'Test Product'}] });
+        } else if (query.includes("UPDATE reservations SET status = 'paid'")) {
+          return Promise.resolve({ rowCount: 1 });
+        }
+        return Promise.resolve({ rows: [] });
+      });
 
       await completeReservationAndCreateSale(1, 'cash');
 
@@ -162,9 +172,16 @@ describe('ReservationService', () => {
       const service = { price: 60, duration_minutes: 45 };
       const updatedReservation = { ...reservation, service_price: 60 };
 
-      mockClientQuery.mockResolvedValueOnce({ rows: [reservation], rowCount: 1 }); // SELECT reservation
-      mockClientQuery.mockResolvedValueOnce({ rows: [service] }); // SELECT service
-      mockClientQuery.mockResolvedValueOnce({ rows: [updatedReservation] }); // UPDATE reservation
+      mockClientQuery.mockImplementation((query: string, params: any[]) => {
+        if (query.includes('SELECT * FROM reservations WHERE id = $1 FOR UPDATE')) {
+          return Promise.resolve({ rows: [reservation], rowCount: 1 });
+        } else if (query.includes('SELECT price, duration_minutes FROM services WHERE id = $1')) {
+          return Promise.resolve({ rows: [service] });
+        } else if (query.includes('UPDATE reservations SET')) {
+          return Promise.resolve({ rows: [updatedReservation] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
 
       const result = await updateReservationDetails(1, { service_id: 2 });
 
