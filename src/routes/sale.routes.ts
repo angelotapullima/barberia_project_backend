@@ -4,11 +4,12 @@ import {
   getSaleByIdController,
   getSaleByReservationIdController,
 } from '../controllers/sale.controller';
+import { authenticateToken } from '../middleware/auth.middleware'; // Import the middleware
 
 const router = Router();
 
-router.get('/', getSalesController);
-router.get('/:id', getSaleByIdController);
-router.get('/by-reservation/:reservationId', getSaleByReservationIdController);
+router.get('/', authenticateToken, getSalesController);
+router.get('/:id', authenticateToken, getSaleByIdController);
+router.get('/by-reservation/:reservationId', authenticateToken, getSaleByReservationIdController);
 
 export default router;
