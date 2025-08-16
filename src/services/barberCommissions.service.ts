@@ -1,100 +1,176 @@
 import getPool from '../database';
 import dayjs from 'dayjs';
-import { getSetting } from './setting.service';
 
 const pool = getPool();
 
-export const calculateMonthlyCommissions = async (year: number, month: number): Promise<void> => {
+/**
+ * Calculates the potential monthly commission details for all barbers on-the-fly.
+ * It checks if a payment has already been made and returns the status accordingly.
+ */
+export const getMonthlyBarberCommissions = async (year: number, month: number): Promise<any[]> => {
   const client = await pool.connect();
   try {
-    await client.query('BEGIN');
+    const periodStart = dayjs(`${year}-${String(month).padStart(2, '0')}-01`).startOf('month').format('YYYY-MM-DD');
+    const periodEnd = dayjs(`${year}-${String(month).padStart(2, '0')}-01`).endOf('month').format('YYYY-MM-DD');
 
-    const periodStart = dayjs(`${year}-${String(month).padStart(2, '0')}-01`).startOf('month').toDate();
-    const periodEnd = dayjs(`${year}-${String(month).padStart(2, '0')}-01`).endOf('month').toDate();
-
-    const [barbersResult] = await Promise.all([
-      client.query('SELECT id, name, base_salary FROM barbers WHERE is_active = true'),
-    ]);
-
+    // 1. Get all active barbers
+    const barbersResult = await client.query('SELECT id, name, base_salary FROM barbers WHERE is_active = true');
     const barbers = barbersResult.rows;
 
+    const reportData = [];
+
     for (const barber of barbers) {
-      // Calculate total services for the month
-      const servicesTotalResult = await client.query(
-        'SELECT COALESCE(SUM(service_amount), 0) AS total FROM sales WHERE barber_id = $1 AND sale_date >= $2 AND sale_date <= $3',
+      // 2. Check if a commission has already been paid for this period
+      const existingCommissionRes = await client.query(
+        'SELECT * FROM barber_commissions WHERE barber_id = $1 AND period_start = $2 AND period_end = $3',
         [barber.id, periodStart, periodEnd]
       );
-      const servicesTotal = parseFloat(servicesTotalResult.rows[0].total);
 
-      // Commission amount is simply the total services for now, as per user's request
-      const commissionAmount = servicesTotal;
+      if (existingCommissionRes.rows.length > 0) {
+        // If payment exists, use its data and mark status as paid
+        const paidCommission = existingCommissionRes.rows[0];
+        reportData.push({
+          barber_id: barber.id,
+          barber_name: barber.name,
+          period_start: paidCommission.period_start,
+          period_end: paidCommission.period_end,
+          base_salary: parseFloat(paidCommission.base_salary),
+          services_total: parseFloat(paidCommission.services_total),
+          total_payment: parseFloat(paidCommission.total_payment),
+          status: paidCommission.status, // 'paid'
+        });
+      } else {
+        // If no payment exists, calculate potential payment
+        const servicesTotalResult = await client.query(
+          'SELECT COALESCE(SUM(service_amount), 0) AS total FROM sales WHERE barber_id = $1 AND sale_date >= $2 AND sale_date <= $3',
+          [barber.id, periodStart, periodEnd]
+        );
+        const servicesTotal = parseFloat(servicesTotalResult.rows[0].total);
 
-      // Calculate total advances for the month
-      const advancesTotalResult = await client.query(
-        'SELECT COALESCE(SUM(amount), 0) AS total FROM barber_advances WHERE barber_id = $1 AND date >= $2 AND date <= $3',
-        [barber.id, periodStart, periodEnd]
-      );
-      const advancesTotal = parseFloat(advancesTotalResult.rows[0].total);
+        const commissionAmount = servicesTotal >= (barber.base_salary * 2)
+          ? servicesTotal / 2
+          : barber.base_salary;
 
-      const totalPayment = commissionAmount - advancesTotal;
+        const advancesTotalResult = await client.query(
+          'SELECT COALESCE(SUM(amount), 0) AS total FROM barber_advances WHERE barber_id = $1 AND date >= $2 AND date <= $3',
+          [barber.id, periodStart, periodEnd]
+        );
+        const advancesTotal = parseFloat(advancesTotalResult.rows[0].total);
 
-      // Insert or update barber_commissions
-      await client.query(
-        `INSERT INTO barber_commissions (
-          barber_id, period_start, period_end, base_salary,
-          services_total, commission_amount, total_payment, status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        ON CONFLICT (barber_id, period_start, period_end) DO UPDATE SET
-          base_salary = EXCLUDED.base_salary,
-          services_total = EXCLUDED.services_total,
-          commission_amount = EXCLUDED.commission_amount,
-          total_payment = EXCLUDED.total_payment,
-          status = EXCLUDED.status, -- Keep status as pending unless explicitly paid
-          created_at = NOW() -- Update created_at on conflict
-        `,
-        [barber.id, periodStart, periodEnd, barber.base_salary, servicesTotal, commissionAmount, totalPayment, 'pending']
-      );
+        const totalPayment = commissionAmount - advancesTotal;
+
+        reportData.push({
+          barber_id: barber.id,
+          barber_name: barber.name,
+          period_start: periodStart,
+          period_end: periodEnd,
+          base_salary: barber.base_salary,
+          services_total: servicesTotal,
+          total_payment: totalPayment,
+          status: 'pending',
+        });
+      }
     }
-
-    await client.query('COMMIT');
+    return reportData.sort((a, b) => a.barber_name.localeCompare(b.barber_name));
   } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('Error calculating monthly commissions:', error);
+    console.error('Error getting monthly barber commissions:', error);
     throw error;
   } finally {
     client.release();
   }
 };
 
-export const finalizeBarberPayment = async (commissionId: number): Promise<any> => {
-  const result = await pool.query(
-    'UPDATE barber_commissions SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
-    ['paid', commissionId]
-  );
-  return result.rows[0] || null;
+/**
+ * Creates and finalizes a barber's payment for a specific period.
+ * This performs the calculation and inserts a new record into barber_commissions.
+ */
+export const createAndFinalizePayment = async (barberId: number, year: number, month: number): Promise<any> => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const periodStart = dayjs(`${year}-${String(month).padStart(2, '0')}-01`).startOf('month').format('YYYY-MM-DD');
+    const periodEnd = dayjs(`${year}-${String(month).padStart(2, '0')}-01`).endOf('month').format('YYYY-MM-DD');
+
+    // Security Validation: Prevent payment before the period ends.
+    if (dayjs().isBefore(dayjs(periodEnd).endOf('day'))) {
+      throw new Error('Payment cannot be finalized before the commission period has ended.');
+    }
+
+    // Check if payment already exists
+    const existingCommissionRes = await client.query(
+      'SELECT id FROM barber_commissions WHERE barber_id = $1 AND period_start = $2 AND period_end = $3',
+      [barberId, periodStart, periodEnd]
+    );
+
+    if (existingCommissionRes.rows.length > 0) {
+      throw new Error('A payment for this barber and period has already been registered.');
+    }
+
+    // Get barber info
+    const barberResult = await client.query('SELECT base_salary FROM barbers WHERE id = $1', [barberId]);
+    if (barberResult.rows.length === 0) throw new Error('Barber not found');
+    const barber = barberResult.rows[0];
+
+    // Perform final calculation
+    const servicesTotalResult = await client.query(
+      'SELECT COALESCE(SUM(service_amount), 0) AS total FROM sales WHERE barber_id = $1 AND sale_date >= $2 AND sale_date <= $3',
+      [barberId, periodStart, periodEnd]
+    );
+    const servicesTotal = parseFloat(servicesTotalResult.rows[0].total);
+
+    const commissionAmount = servicesTotal >= (barber.base_salary * 2)
+      ? servicesTotal / 2
+      : barber.base_salary;
+
+    const advancesTotalResult = await client.query(
+      'SELECT COALESCE(SUM(amount), 0) AS total FROM barber_advances WHERE barber_id = $1 AND date >= $2 AND date <= $3',
+      [barberId, periodStart, periodEnd]
+    );
+    const advancesTotal = parseFloat(advancesTotalResult.rows[0].total);
+    const totalPayment = commissionAmount - advancesTotal;
+
+    // Create the commission record with 'paid' status
+    const result = await client.query(
+      `INSERT INTO barber_commissions (
+        barber_id, period_start, period_end, base_salary,
+        services_total, commission_amount, total_payment, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [barberId, periodStart, periodEnd, barber.base_salary, servicesTotal, commissionAmount, totalPayment, 'paid']
+    );
+
+    await client.query('COMMIT');
+    return result.rows[0] || null;
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error creating and finalizing payment:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
+
+/**
+ * Gets all advances for a barber for a specific month.
+ */
 export const getBarberAdvancesForMonth = async (barberId: number, year: number, month: number): Promise<any[]> => {
   const periodStart = dayjs(`${year}-${String(month).padStart(2, '0')}-01`).startOf('month').toDate();
   const periodEnd = dayjs(`${year}-${String(month).padStart(2, '0')}-01`).endOf('month').toDate();
 
   const result = await pool.query(
-    `SELECT
-      id,
-      amount,
-      date,
-      notes
-    FROM
-      barber_advances
-    WHERE
-      barber_id = $1 AND date >= $2 AND date <= $3
-    ORDER BY
-      date ASC`,
+    `SELECT id, amount, date, notes FROM barber_advances
+     WHERE barber_id = $1 AND date >= $2 AND date <= $3
+     ORDER BY date ASC`,
     [barberId, periodStart, periodEnd]
   );
   return result.rows;
 };
 
+/**
+ * Gets the detailed list of paid services for a barber for a specific month from sales records.
+ */
 export const getBarberServicesForMonth = async (barberId: number, year: number, month: number): Promise<any[]> => {
   const periodStart = dayjs(`${year}-${String(month).padStart(2, '0')}-01`).startOf('month').toDate();
   const periodEnd = dayjs(`${year}-${String(month).padStart(2, '0')}-01`).endOf('month').toDate();
@@ -103,46 +179,16 @@ export const getBarberServicesForMonth = async (barberId: number, year: number, 
     `SELECT
       s.id as sale_id,
       s.sale_date,
-      s.service_amount,
-      serv.name as service_name,
-      serv.duration_minutes
-    FROM
-      sales s
-    JOIN
-      reservations r ON s.reservation_id = r.id
-    JOIN
-      services serv ON r.service_id = serv.id
-    WHERE
-      s.barber_id = $1 AND s.sale_date >= $2 AND s.sale_date <= $3
-    ORDER BY
-      s.sale_date ASC`,
+      si.total_price as service_amount,
+      si.item_name as service_name
+    FROM sales s
+    JOIN sale_items si ON s.id = si.sale_id
+    WHERE s.barber_id = $1
+      AND si.item_type = 'service'
+      AND s.sale_date >= $2
+      AND s.sale_date <= $3
+    ORDER BY s.sale_date ASC`,
     [barberId, periodStart, periodEnd]
   );
-  return result.rows;
-};
-
-export const getMonthlyBarberCommissions = async (year: number, month: number): Promise<any[]> => {
-  const periodStart = dayjs(`${year}-${String(month).padStart(2, '0')}-01`).startOf('month').toDate();
-  const periodEnd = dayjs(`${year}-${String(month).padStart(2, '0')}-01`).endOf('month').toDate();
-
-  const result = await pool.query(
-    `SELECT
-      bc.*,
-      b.name as barber_name
-    FROM
-      barber_commissions bc
-    JOIN
-      barbers b ON bc.barber_id = b.id
-    WHERE
-      bc.period_start = $1 AND bc.period_end = $2
-    ORDER BY
-      b.name ASC`,
-    [periodStart, periodEnd]
-  );
-  return result.rows;
-};
-
-export const getBarberCommissions = async (): Promise<any[]> => {
-  const result = await pool.query('SELECT * FROM barber_commissions ORDER BY period_end DESC, barber_id ASC');
   return result.rows;
 };

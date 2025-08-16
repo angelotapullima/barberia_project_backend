@@ -2,12 +2,10 @@ import { Request, Response } from 'express';
 import {
   getComprehensiveSales,
   getServicesProductsSales,
-  getBarberPayments,
   getDetailedBarberServiceSales,
   getStationUsage,
   getCustomerFrequency,
   getPeakHours,
-  generateBarberPayments,
 } from '../services/report.service';
 
 const handleReportError = (res: Response, error: any, message: string) => {
@@ -77,34 +75,6 @@ export const getPeakHoursReportController = async (req: Request, res: Response):
     res.json(data);
   } catch (error) {
     handleReportError(res, error, 'Error al obtener el reporte de horas pico.');
-  }
-};
-
-export const getBarberPaymentsReportController = async (req: Request, res: Response): Promise<void> => {
-  const { startDate, endDate } = req.query;
-  if (!startDate || !endDate) {
-    res.status(400).json({ message: 'Fechas de inicio y fin son requeridas.' });
-    return;
-  }
-  try {
-    const payments = await getBarberPayments(startDate as string, endDate as string);
-    res.json(payments);
-  } catch (error) {
-    handleReportError(res, error, 'Error al obtener el reporte de pago a barberos.');
-  }
-};
-
-export const generateBarberPaymentsController = async (req: Request, res: Response): Promise<void> => {
-  const { startDate, endDate } = req.body;
-  if (!startDate || !endDate) {
-    res.status(400).json({ message: 'Fechas de inicio y fin son requeridas.' });
-    return;
-  }
-  try {
-    await generateBarberPayments(startDate, endDate);
-    res.status(201).json({ message: 'Pagos generados exitosamente.' });
-  } catch (error) {
-    handleReportError(res, error, 'Error al generar los pagos de barberos.');
   }
 };
 
