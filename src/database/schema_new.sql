@@ -438,8 +438,67 @@ INSERT INTO inventory_movements (product_id, movement_type, quantity, reference_
 
 -- ===== DATOS DE PRUEBA ADICIONALES =====
 
+
 -- =====================================================================================================================
--- DATOS DE PRUEBA: 3 MESES HISTÓRICOS (Corregido)
+-- CORRECCIÓN: DATOS DE PRUEBA CON HORAS CORRECTAS
+-- Reemplazar las secciones de inserción de reservas en el script original
+-- =====================================================================================================================
+
+-- =====================================================================================================================
+-- FUNCIÓN MEJORADA PARA CALCULAR HORAS CORRECTAS
+-- =====================================================================================================================
+
+-- Función mejorada para obtener una hora válida dentro del horario laboral
+CREATE OR REPLACE FUNCTION get_valid_business_time(day DATE, start_hour INT DEFAULT 8, end_hour INT DEFAULT 21)
+RETURNS TIMESTAMP WITH TIME ZONE AS $$
+DECLARE
+    random_minutes INT;
+    calculated_time TIMESTAMP WITH TIME ZONE;
+BEGIN
+    -- Generar minutos aleatorios dentro del rango de horas de negocio
+    random_minutes := FLOOR(RANDOM() * ((end_hour - start_hour) * 60));
+    calculated_time := day::TIMESTAMP + INTERVAL '1 hour' * start_hour + INTERVAL '1 minute' * random_minutes;
+    
+    -- Asegurar que esté dentro del horario laboral
+    IF EXTRACT(HOUR FROM calculated_time) < start_hour THEN
+        calculated_time := DATE_TRUNC('day', calculated_time) + INTERVAL '1 hour' * start_hour;
+    ELSIF EXTRACT(HOUR FROM calculated_time) >= end_hour THEN
+        calculated_time := DATE_TRUNC('day', calculated_time) + INTERVAL '1 hour' * (end_hour - 1);
+    END IF;
+    
+    RETURN calculated_time;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Función para calcular end_time correcto basado en start_time y duración del servicio
+CREATE OR REPLACE FUNCTION calculate_valid_end_time(start_time TIMESTAMP WITH TIME ZONE, duration_minutes INT, max_hour INT DEFAULT 21)
+RETURNS TIMESTAMP WITH TIME ZONE AS $$
+DECLARE
+    calculated_end_time TIMESTAMP WITH TIME ZONE;
+    max_end_time TIMESTAMP WITH TIME ZONE;
+BEGIN
+    -- Calcular end_time basado en la duración
+    calculated_end_time := start_time + INTERVAL '1 minute' * duration_minutes;
+    
+    -- Límite máximo del día (ej: 21:00)
+    max_end_time := DATE_TRUNC('day', start_time) + INTERVAL '1 hour' * max_hour;
+    
+    -- Si el end_time calculado excede el horario laboral, usar el límite máximo
+    IF calculated_end_time > max_end_time THEN
+        calculated_end_time := max_end_time;
+    END IF;
+    
+    -- Asegurar que end_time sea al menos 1 minuto después de start_time
+    IF calculated_end_time <= start_time THEN
+        calculated_end_time := start_time + INTERVAL '1 minute';
+    END IF;
+    
+    RETURN calculated_end_time;
+END;
+$$ LANGUAGE plpgsql;
+
+-- =====================================================================================================================
+-- DATOS DE PRUEBA: 3 MESES HISTÓRICOS (CORREGIDO CON HORAS VÁLIDAS)
 -- =====================================================================================================================
 DO $$
 DECLARE
@@ -461,6 +520,8 @@ DECLARE
     service_price_val REAL;
     total_amount_val REAL;
     products_amount_val REAL;
+    calculated_start_time TIMESTAMP WITH TIME ZONE;
+    calculated_end_time TIMESTAMP WITH TIME ZONE;
 BEGIN
     -- Generar datos históricos de 90 días (3 meses)
     FOR day_counter IN 0..89 LOOP
@@ -476,22 +537,26 @@ BEGIN
                 FOR i IN 1..(1 + FLOOR(RANDOM() * 4)) LOOP
                     
                     client_name_val := random_clients[1 + FLOOR(RANDOM() * array_length(random_clients, 1))];
-                    SELECT * INTO service_rec FROM services WHERE is_active = true AND duration_minutes <= 45 ORDER BY RANDOM() LIMIT 1;
+                    SELECT * INTO service_rec FROM services WHERE is_active = true AND duration_minutes <= 90 ORDER BY RANDOM() LIMIT 1;
                     service_price_val := service_rec.price;
                     
-                    -- Crear reserva histórica (todas pagadas)
+                    -- CORRECCIÓN: Calcular horas correctamente
+                    calculated_start_time := get_valid_business_time(historic_date, 8, 19); -- Hasta las 19h para dejar margen
+                    calculated_end_time := calculate_valid_end_time(calculated_start_time, service_rec.duration_minutes, 21);
+                    
+                    -- Crear reserva histórica (todas pagadas) con horas correctas
                     INSERT INTO reservations (
                         barber_id, station_id, service_id, client_name, client_phone,
                         start_time, end_time, status, service_price, notes
                     ) VALUES (
                         barber_rec.id, barber_rec.station_id, service_rec.id, client_name_val,
                         '9' || LPAD((100000000 + FLOOR(RANDOM() * 899999999))::TEXT, 9, '0'),
-                        get_random_time_in_day(historic_date, 8, 19),
-                        get_random_time_in_day(historic_date, 8, 19) + INTERVAL '1 minute' * service_rec.duration_minutes,
+                        calculated_start_time,
+                        calculated_end_time,
                         'paid', service_price_val, 'Reserva histórica'
                     ) RETURNING id INTO reservation_id_val;
                     
-                    -- Ahora, crear la venta asociada a esa reserva
+                    -- Crear la venta asociada a esa reserva
                     products_amount_val := 0;
                     total_amount_val := service_price_val + products_amount_val;
                     
@@ -502,7 +567,7 @@ BEGIN
                         reservation_id_val, barber_rec.id, client_name_val, service_price_val,
                         products_amount_val, total_amount_val,
                         CASE WHEN RANDOM() < 0.5 THEN 'cash' WHEN RANDOM() < 0.8 THEN 'card' ELSE 'transfer' END,
-                        get_random_time_in_day(historic_date, 8, 19)
+                        calculated_start_time + INTERVAL '1 minute' * service_rec.duration_minutes -- Sale_date al finalizar servicio
                     ) RETURNING id INTO sale_id_val;
                     
                     -- Crear sale_items para el servicio
@@ -511,7 +576,6 @@ BEGIN
                     ) VALUES (
                         sale_id_val, 'service', service_rec.id, service_rec.name, 1, service_price_val, service_price_val
                     );
-                    
                     -- Crear sale_items para productos (si los hay)
                     IF products_amount_val > 0 THEN
                         INSERT INTO reservation_products (
@@ -534,10 +598,8 @@ BEGIN
     END LOOP;
 END $$;
 
-
-
 -- =====================================================================================================================
--- DATOS DE PRUEBA: ESTA SEMANA (LUNES A HOY) (Corregido)
+-- DATOS DE PRUEBA: ESTA SEMANA (LUNES A HOY) (CORREGIDO CON HORAS VÁLIDAS)
 -- =====================================================================================================================
 
 DO $$
@@ -560,6 +622,8 @@ DECLARE
     total_amount_val REAL;
     products_amount_val REAL;
     reservation_status TEXT;
+    calculated_start_time TIMESTAMP WITH TIME ZONE;
+    calculated_end_time TIMESTAMP WITH TIME ZONE;
 BEGIN
     -- Desde el lunes de esta semana hasta hoy
     FOR day_counter IN 0..6 LOOP
@@ -573,11 +637,11 @@ BEGIN
             
             FOR barber_rec IN SELECT * FROM barbers WHERE is_active = true ORDER BY id LOOP
                 
-                -- 1-3 reservas por barbero por día en semana actual (menos reservas)
+                -- 1-3 reservas por barbero por día en semana actual
                 FOR i IN 1..(1 + FLOOR(RANDOM() * 3)) LOOP
                     
                     client_name_val := random_clients[1 + FLOOR(RANDOM() * array_length(random_clients, 1))];
-                    SELECT * INTO service_rec FROM services WHERE is_active = true AND duration_minutes <= 45 ORDER BY RANDOM() LIMIT 1;
+                    SELECT * INTO service_rec FROM services WHERE is_active = true AND duration_minutes <= 90 ORDER BY RANDOM() LIMIT 1;
                     service_price_val := service_rec.price;
                     
                     -- Estados variados: 60% pagadas, 20% completadas, 15% en progreso, 5% confirmadas
@@ -588,14 +652,18 @@ BEGIN
                         ELSE 'confirmed'
                     END;
                     
+                    -- CORRECCIÓN: Calcular horas correctamente
+                    calculated_start_time := get_valid_business_time(current_date_iter, 8, 19);
+                    calculated_end_time := calculate_valid_end_time(calculated_start_time, service_rec.duration_minutes, 21);
+                    
                     INSERT INTO reservations (
                         barber_id, station_id, service_id, client_name, client_phone,
                         start_time, end_time, status, service_price, notes
                     ) VALUES (
                         barber_rec.id, barber_rec.station_id, service_rec.id, client_name_val,
                         '9' || LPAD((200000000 + FLOOR(RANDOM() * 799999999))::TEXT, 9, '0'),
-                        get_random_time_in_day(current_date_iter, 8, 19),
-                        get_random_time_in_day(current_date_iter, 8, 19) + INTERVAL '1 minute' * service_rec.duration_minutes,
+                        calculated_start_time,
+                        calculated_end_time,
                         reservation_status, service_price_val, 'Reserva de esta semana - ' || current_date_iter::TEXT
                     ) RETURNING id INTO reservation_id_val;
                     
@@ -627,7 +695,7 @@ BEGIN
                             reservation_id_val, barber_rec.id, client_name_val, service_price_val,
                             products_amount_val, total_amount_val,
                             CASE WHEN RANDOM() < 0.5 THEN 'cash' WHEN RANDOM() < 0.8 THEN 'card' ELSE 'transfer' END,
-                            get_random_time_in_day(current_date_iter, 8, 19)
+                            calculated_start_time + INTERVAL '1 minute' * service_rec.duration_minutes
                         ) RETURNING id INTO sale_id_val;
                         
                         INSERT INTO sale_items (
@@ -653,10 +721,8 @@ BEGIN
     END LOOP;
 END $$;
 
-
-
 -- =====================================================================================================================
--- DATOS DE PRUEBA: PRÓXIMA SEMANA (RESERVAS FUTURAS) (Corregido)
+-- DATOS DE PRUEBA: PRÓXIMA SEMANA (RESERVAS FUTURAS) (CORREGIDO CON HORAS VÁLIDAS)
 -- =====================================================================================================================
 
 DO $$
@@ -676,6 +742,8 @@ DECLARE
     client_name_val TEXT;
     service_price_val REAL;
     reservation_status TEXT;
+    calculated_start_time TIMESTAMP WITH TIME ZONE;
+    calculated_end_time TIMESTAMP WITH TIME ZONE;
 BEGIN
     -- Próxima semana completa (7 días)
     FOR day_counter IN 0..6 LOOP
@@ -690,11 +758,15 @@ BEGIN
                 FOR i IN 1..(1 + FLOOR(RANDOM() * 4)) LOOP
                     
                     client_name_val := random_clients[1 + FLOOR(RANDOM() * array_length(random_clients, 1))];
-                    SELECT * INTO service_rec FROM services WHERE is_active = true AND duration_minutes <= 45 ORDER BY RANDOM() LIMIT 1;
+                    SELECT * INTO service_rec FROM services WHERE is_active = true AND duration_minutes <= 90 ORDER BY RANDOM() LIMIT 1;
                     service_price_val := service_rec.price;
                     
                     -- Solo reservas pendientes o confirmadas para el futuro
                     reservation_status := CASE WHEN RANDOM() < 0.75 THEN 'pending' ELSE 'confirmed' END;
+                    
+                    -- CORRECCIÓN: Calcular horas correctamente
+                    calculated_start_time := get_valid_business_time(future_date_iter, 8, 19);
+                    calculated_end_time := calculate_valid_end_time(calculated_start_time, service_rec.duration_minutes, 21);
                     
                     INSERT INTO reservations (
                         barber_id, station_id, service_id, client_name, client_phone,
@@ -702,8 +774,8 @@ BEGIN
                     ) VALUES (
                         barber_rec.id, barber_rec.station_id, service_rec.id, client_name_val,
                         '9' || LPAD((300000000 + FLOOR(RANDOM() * 699999999))::TEXT, 9, '0'),
-                        get_random_time_in_day(future_date_iter, 8, 19),
-                        get_random_time_in_day(future_date_iter, 8, 19) + INTERVAL '1 minute' * service_rec.duration_minutes,
+                        calculated_start_time,
+                        calculated_end_time,
                         reservation_status, service_price_val, 'Reserva para la próxima semana - ' || future_date_iter::TEXT
                     ) RETURNING id INTO reservation_id_val;
                     
@@ -723,8 +795,47 @@ BEGIN
     END LOOP;
 END $$;
 
+-- =====================================================================================================================
+-- LIMPIAR FUNCIONES AUXILIARES TEMPORALES
+-- =====================================================================================================================
 
+DROP FUNCTION IF EXISTS get_valid_business_time(DATE, INT, INT);
+DROP FUNCTION IF EXISTS calculate_valid_end_time(TIMESTAMP WITH TIME ZONE, INT, INT);
 
+-- =====================================================================================================================
+-- VERIFICACIÓN FINAL DE RESERVAS
+-- =====================================================================================================================
+
+SELECT '========================================' AS resultado;
+SELECT '✅ VERIFICACIÓN DE HORAS DE RESERVAS' AS resultado;
+SELECT '========================================' AS resultado;
+
+-- Verificar reservas con horarios incorrectos
+SELECT 
+    'Reservas fuera de horario laboral:' AS tipo,
+    COUNT(*)::TEXT AS cantidad
+FROM reservations 
+WHERE 
+    EXTRACT(HOUR FROM start_time) < 8 
+    OR EXTRACT(HOUR FROM start_time) > 21 
+    OR EXTRACT(HOUR FROM end_time) > 21;
+
+-- Verificar reservas con duración excesiva
+SELECT 
+    'Reservas con duración > 90 min:' AS tipo,
+    COUNT(*)::TEXT AS cantidad
+FROM reservations 
+WHERE 
+    EXTRACT(EPOCH FROM (end_time - start_time))/60 > 90;
+
+-- Verificar reservas con end_time antes de start_time
+SELECT 
+    'Reservas con end_time <= start_time:' AS tipo,
+    COUNT(*)::TEXT AS cantidad
+FROM reservations 
+WHERE end_time <= start_time;
+
+SELECT '========================================' AS resultado;
 
 
 -- =====================================================================================================================
