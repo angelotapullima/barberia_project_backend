@@ -11,25 +11,26 @@ import {
   getCalendarViewDataController,
   fixReservationEndTimesController,
 } from '../controllers/reservation.controller';
+import { authenticateToken } from '../middleware/auth.middleware'; // Import the middleware
 
 const router = Router();
 
 // Aggregated view data
-router.get('/view/calendar', getCalendarViewDataController);
-router.post('/fix-end-times', fixReservationEndTimesController);
+router.get('/view/calendar', authenticateToken, getCalendarViewDataController);
+router.post('/fix-end-times', authenticateToken, fixReservationEndTimesController);
 
 // Basic CRUD
-router.get('/', getAllReservationsController);
-router.get('/:id', getReservationByIdController);
-router.post('/', createReservationController);
-router.put('/:id', updateReservationController);
-router.delete('/:id', deleteReservationController);
+router.get('/', authenticateToken, getAllReservationsController);
+router.get('/:id', authenticateToken, getReservationByIdController);
+router.post('/', authenticateToken, createReservationController);
+router.put('/:id', authenticateToken, updateReservationController);
+router.delete('/:id', authenticateToken, deleteReservationController);
 
 // Complete reservation and create sale
-router.post('/:id/complete', completeReservationController);
+router.post('/:id/complete', authenticateToken, completeReservationController);
 
 // Add/remove products from an active reservation
-router.post('/:id/products', addProductToReservationController);
-router.delete('/:id/products/:reservationProductId', removeProductFromReservationController);
+router.post('/:id/products', authenticateToken, addProductToReservationController);
+router.delete('/:id/products/:reservationProductId', authenticateToken, removeProductFromReservationController);
 
 export default router;
