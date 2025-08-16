@@ -5,6 +5,7 @@ import {
   createBarberController,
   updateBarberController,
   deleteBarberController,
+  createBarberAdvanceController,
 } from '../controllers/barber.controller';
 
 const router = Router();
@@ -18,5 +19,6 @@ router.get('/:id', getBarberByIdController);
 router.post('/', createBarberController);
 router.put('/:id', updateBarberController);
 router.delete('/:id', deleteBarberController);
+router.post('/:id/advances', createBarberAdvanceController);
 
 export default router;

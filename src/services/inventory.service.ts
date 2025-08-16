@@ -32,7 +32,7 @@ export const getInventoryMovements = async (productId?: number): Promise<any[]> 
     query += ' WHERE product_id = $1';
     params.push(productId);
   }
-  query += ' ORDER BY created_at DESC';
+  query += ' ORDER BY movement_date DESC';
   const result = await pool.query(query, params);
   return result.rows;
 };

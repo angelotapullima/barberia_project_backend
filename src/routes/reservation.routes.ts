@@ -9,12 +9,14 @@ import {
   addProductToReservationController,
   removeProductFromReservationController,
   getCalendarViewDataController,
+  fixReservationEndTimesController,
 } from '../controllers/reservation.controller';
 
 const router = Router();
 
 // Aggregated view data
 router.get('/view/calendar', getCalendarViewDataController);
+router.post('/fix-end-times', fixReservationEndTimesController);
 
 // Basic CRUD
 router.get('/', getAllReservationsController);

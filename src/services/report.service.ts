@@ -67,23 +67,69 @@ export const getBarberPayments = async (
   startDate: string,
   endDate: string
 ): Promise<any[]> => {
-    // The view barber_sales_summary already contains all the logic.
-    // The date filter in the view is for the last 30 days by default, 
-    // but for a specific report, we should filter explicitly.
     const query = `
         SELECT 
-            barber_id, 
-            barber_name, 
-            base_salary, 
-            total_services, 
-            commission_payment as payment
-        FROM barber_sales_summary
-        -- Note: The view needs to be modified to accept date ranges or we filter here.
-        -- For now, we assume the view is for the current month as per its definition.
+            b.id as barber_id, 
+            b.name as barber_name, 
+            b.base_salary, 
+            COALESCE(SUM(s.service_amount), 0) as total_services,
+            CASE
+                WHEN COALESCE(SUM(s.service_amount), 0) > (b.base_salary * 2)
+                THEN COALESCE(SUM(s.service_amount), 0) / 2
+                ELSE b.base_salary
+            END as payment
+        FROM barbers b
+        LEFT JOIN sales s ON b.id = s.barber_id AND s.sale_date BETWEEN $1 AND $2
+        GROUP BY b.id, b.name, b.base_salary;
     `;
-    // In a real implementation, you'd pass startDate and endDate to the view or filter here.
-    const { rows } = await pool.query(query);
+    const { rows } = await pool.query(query, [startDate, endDate]);
     return rows;
+};
+
+export const generateBarberPayments = async (startDate: string, endDate: string): Promise<void> => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const barbersResult = await client.query('SELECT id, base_salary FROM barbers WHERE is_active = true');
+    const barbers = barbersResult.rows;
+
+    for (const barber of barbers) {
+      const serviceAmountResult = await client.query(
+        'SELECT COALESCE(SUM(service_amount), 0) as total FROM sales WHERE barber_id = $1 AND sale_date BETWEEN $2 AND $3',
+        [barber.id, startDate, endDate]
+      );
+      const serviceAmount = parseFloat(serviceAmountResult.rows[0].total);
+
+      const commission = serviceAmount > (barber.base_salary * 2) ? serviceAmount / 2 : barber.base_salary;
+
+      const advancesResult = await client.query(
+        'SELECT COALESCE(SUM(amount), 0) as total FROM barber_advances WHERE barber_id = $1 AND date BETWEEN $2 AND $3 AND commission_id IS NULL',
+        [barber.id, startDate, endDate]
+      );
+      const advancesAmount = parseFloat(advancesResult.rows[0].total);
+
+      const totalPayment = commission - advancesAmount;
+
+      const commissionResult = await client.query(
+        'INSERT INTO barber_commissions (barber_id, period_start, period_end, base_salary, services_total, commission_amount, total_payment) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+        [barber.id, startDate, endDate, barber.base_salary, serviceAmount, commission, totalPayment]
+      );
+      const commissionId = commissionResult.rows[0].id;
+
+      await client.query(
+        'UPDATE barber_advances SET commission_id = $1 WHERE barber_id = $2 AND date BETWEEN $3 AND $4 AND commission_id IS NULL',
+        [commissionId, barber.id, startDate, endDate]
+      );
+    }
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
 export const getDetailedBarberServiceSales = async (filters: {
