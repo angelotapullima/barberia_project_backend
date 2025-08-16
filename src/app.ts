@@ -16,6 +16,8 @@ import posRoutes from './routes/pos.routes'; // Import POS routes
 import inventoryRoutes from './routes/inventory.routes'; // Import inventory routes
 import barberCommissionsRoutes from './routes/barberCommissions.routes'; // Import barber commissions routes
 import paymentRoutes from './routes/payment.routes';
+import swaggerUi from 'swagger-ui-express'; // Import swagger-ui-express
+import swaggerSpec from './swagger'; // Import your swaggerSpec
 
 const app = express();
 
@@ -29,6 +31,9 @@ app.use(cors({
 }));
 
 app.use(express.json());
+
+// Swagger UI setup
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Basic route to confirm server is running
 app.get('/', (req, res) => {

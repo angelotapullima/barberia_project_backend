@@ -1,6 +1,46 @@
 import { Request, Response } from 'express';
 import * as barberService from '../services/barber.service';
 
+/**
+ * @swagger
+ * /barbers:
+ *   get:
+ *     summary: Obtiene una lista de todos los barberos.
+ *     description: Retorna un array de objetos de barbero.
+ *     tags:
+ *       - Barberos
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Lista de barberos obtenida exitosamente.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: integer
+ *                     description: ID del barbero.
+ *                   name:
+ *                     type: string
+ *                     description: Nombre del barbero.
+ *                   email:
+ *                     type: string
+ *                     description: Correo electrónico del barbero.
+ *                   phone:
+ *                     type: string
+ *                     description: Número de teléfono del barbero.
+ *                   # ... (añadir más propiedades del modelo de barbero)
+ *       401:
+ *         description: No autorizado. Token no proporcionado o inválido.
+ *       403:
+ *         description: Prohibido. El usuario no tiene permisos para acceder a este recurso.
+ *       500:
+ *         description: Error del servidor.
+ */
 export const getAllBarbersController = async (req: Request, res: Response): Promise<void> => {
   try {
     const barbers = await barberService.getAllBarbers();

@@ -5,6 +5,42 @@ import {
   getAllSettings,
 } from '../services/setting.service';
 
+/**
+ * @swagger
+ * /settings/{key}:
+ *   get:
+ *     summary: Obtiene una configuración específica por su clave.
+ *     description: Retorna el valor de una configuración del sistema.
+ *     tags:
+ *       - Configuración
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: key
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Clave de la configuración a obtener.
+ *     responses:
+ *       200:
+ *         description: Configuración obtenida exitosamente.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               additionalProperties:
+ *                 type: string
+ *                 description: El valor de la configuración.
+ *       401:
+ *         description: No autorizado. Token no proporcionado o inválido.
+ *       403:
+ *         description: Prohibido. El usuario no tiene permisos para acceder a este recurso.
+ *       404:
+ *         description: Configuración no encontrada.
+ *       500:
+ *         description: Error interno del servidor.
+ */
 export const getSettingController = async (req: Request, res: Response): Promise<void> => {
   const { key } = req.params;
   try {
@@ -20,6 +56,47 @@ export const getSettingController = async (req: Request, res: Response): Promise
   }
 };
 
+/**
+ * @swagger
+ * /settings:
+ *   put:
+ *     summary: Actualiza múltiples configuraciones.
+ *     description: Actualiza una o varias configuraciones del sistema. El cuerpo de la petición debe ser un objeto con pares clave-valor.
+ *     tags:
+ *       - Configuración
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             additionalProperties:
+ *               type: string
+ *               description: El valor de la configuración.
+ *             example:
+ *               nombre_barberia: "Mi Barbería"
+ *               horario_apertura: "09:00"
+ *     responses:
+ *       200:
+ *         description: Configuraciones actualizadas exitosamente.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: El cuerpo de la petición debe ser un objeto con clave-valor.
+ *       401:
+ *         description: No autorizado. Token no proporcionado o inválido.
+ *       403:
+ *         description: Prohibido. El usuario no tiene permisos para realizar esta acción.
+ *       500:
+ *         description: Error interno del servidor.
+ */
 export const updateSettingController = async (req: Request, res: Response): Promise<void> => {
   try {
     const settings = req.body;
@@ -41,6 +118,36 @@ export const updateSettingController = async (req: Request, res: Response): Prom
   }
 };
 
+/**
+ * @swagger
+ * /settings:
+ *   get:
+ *     summary: Obtiene todas las configuraciones del sistema.
+ *     description: Retorna un objeto con todas las configuraciones clave-valor del sistema.
+ *     tags:
+ *       - Configuración
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Todas las configuraciones obtenidas exitosamente.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               additionalProperties:
+ *                 type: string
+ *                 description: El valor de la configuración.
+ *               example:
+ *                 nombre_barberia: "Mi Barbería"
+ *                 horario_apertura: "09:00"
+ *       401:
+ *         description: No autorizado. Token no proporcionado o inválido.
+ *       403:
+ *         description: Prohibido. El usuario no tiene permisos para acceder a este recurso.
+ *       500:
+ *         description: Error interno del servidor.
+ */
 export const getAllSettingsController = async (req: Request, res: Response): Promise<void> => {
   try {
     const settings = await getAllSettings();
