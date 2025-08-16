@@ -5,7 +5,7 @@ import {
   getStationUsageReportController,
   getCustomerFrequencyReportController,
   getPeakHoursReportController,
-  getBarberPaymentsReportController,
+  
   getDetailedBarberServiceSalesReportController,
 } from './report.controller';
 import * as reportService from '../services/report.service'; // Import all functions from service
@@ -18,7 +18,7 @@ jest.mock('../services/report.service', () => ({
   getStationUsage: jest.fn(),
   getCustomerFrequency: jest.fn(),
   getPeakHours: jest.fn(),
-  getBarberPayments: jest.fn(),
+  
   getDetailedBarberServiceSales: jest.fn(),
 }));
 
@@ -212,40 +212,7 @@ describe('ReportController', () => {
     });
   });
 
-  describe('getBarberPaymentsReportController', () => {
-    it('debería obtener el reporte de pagos a barberos', async () => {
-      const paymentsData = [{ barber_id: 1, barber_name: 'Barbero A', payment: 1500 }];
-      (reportService.getBarberPayments as jest.Mock).mockResolvedValue(paymentsData);
-
-      mockRequest.query = { startDate: '2025-01-01', endDate: '2025-01-31' };
-
-      await getBarberPaymentsReportController(mockRequest as Request, mockResponse as Response);
-
-      expect(reportService.getBarberPayments).toHaveBeenCalledWith('2025-01-01', '2025-01-31');
-      expect(mockResponse.json).toHaveBeenCalledWith(paymentsData);
-      expect(mockResponse.status).not.toHaveBeenCalledWith(500);
-    });
-
-    it('debería manejar parámetros faltantes al obtener el reporte de pagos a barberos', async () => {
-      mockRequest.query = { startDate: '2025-01-01' }; // Missing endDate
-
-      await getBarberPaymentsReportController(mockRequest as Request, mockResponse as Response);
-
-      expect(mockResponse.status).toHaveBeenCalledWith(400);
-      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Fechas de inicio y fin son requeridas.' });
-    });
-
-    it('debería manejar errores al obtener el reporte de pagos a barberos', async () => {
-      (reportService.getBarberPayments as jest.Mock).mockRejectedValue(new Error('Error de DB'));
-
-      mockRequest.query = { startDate: '2025-01-01', endDate: '2025-01-31' };
-
-      await getBarberPaymentsReportController(mockRequest as Request, mockResponse as Response);
-
-      expect(mockResponse.status).toHaveBeenCalledWith(500);
-      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Error al obtener el reporte de pago a barberos.' });
-    });
-  });
+  
 
   describe('getDetailedBarberServiceSalesReportController', () => {
     it('debería obtener el reporte detallado de servicios por barbero', async () => {
